@@ -850,9 +850,9 @@ QProMS <- R6Class(
       p <- self$normalized_data %>% 
         group_by(gene_names, condition) %>% 
         summarise(
-          mean = mean(intensity, na.rm = TRUE),
-          sd = sd(intensity, na.rm = TRUE),
-          CV = round(sd / mean, 3)
+          mean = mean(if (self$log_transform) intensity^2 else intensity, na.rm = TRUE),
+          sd   = sd(if (self$log_transform) intensity^2 else intensity, na.rm = TRUE),
+          CV   = round(sd / mean, 3)
         ) %>% 
         ungroup() %>% 
         group_by(condition) %>% 
