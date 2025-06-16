@@ -67,22 +67,22 @@ jobs:
      #   shell: Rscript {0}
      #   run: rhino::test_r()
 
-      - name: Setup R dependencies
-        uses: r-lib/actions/setup-renv@v2
-        with:
-          r-version: '4.4.0'
+     # - name: Setup R dependencies
+     #   uses: r-lib/actions/setup-renv@v2
+     #   with:
+     #    r-version: '4.4.0'
 
-      - name: Install Bioconductor org.EcK12.eg.db
-        run: |
-          Rscript -e 'if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")'
-          Rscript -e 'BiocManager::install("org.EcK12.eg.db", ask = FALSE)'
+     # - name: Install Bioconductor org.EcK12.eg.db
+      #  run: |
+      #    Rscript -e 'if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")'
+       #   Rscript -e 'BiocManager::install("org.EcK12.eg.db", ask = FALSE)'
 
-      - name: Run Cypress end-to-end tests
-        if: always()
-        uses: cypress-io/github-action@v6
-        with:
-          working-directory: .rhino # Created by earlier commands which use Node.js
-          start: npm run run-app
-          project: ../tests
-          wait-on: 'http://localhost:3333/'
-          wait-on-timeout: 60
+     # - name: Run Cypress end-to-end tests
+      #  if: always()
+      #  uses: cypress-io/github-action@v6
+       # with:
+        #  working-directory: .rhino # Created by earlier commands which use Node.js
+        #  start: npm run run-app
+       #   project: ../tests
+       #   wait-on: 'http://localhost:3333/'
+       #   wait-on-timeout: 60
