@@ -69,6 +69,8 @@ jobs:
 
       - name: Setup R dependencies
         uses: r-lib/actions/setup-renv@v2
+        with:
+          r-version: '4.4.0'
 
       - name: Install Bioconductor org.EcK12.eg.db
         run: |
