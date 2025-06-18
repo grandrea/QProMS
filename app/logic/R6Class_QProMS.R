@@ -780,18 +780,17 @@ QProMS <- R6Class(
 
       p <- self$normalized_data %>%
         mutate(intensity = round(intensity, 2)) %>%
-        group_by(condition, label) %>%
+        group_by(label, condition) %>%
         e_charts(renderer = self$plot_format) %>%
         e_boxplot(
           intensity,
-          colorBy = "data",
+          colorBy = "series",
           layout = 'horizontal',
           outliers = FALSE,
           itemStyle = list(borderWidth = 3)
         ) %>%
         e_tooltip(trigger = "item") %>%
         e_grid(containLabel = TRUE) %>%
-        e_color(self$color_palette) %>%
         e_legend(show = FALSE) %>%
         e_y_axis(
           name = "log2 Intensity",
@@ -803,8 +802,8 @@ QProMS <- R6Class(
             lineHeight = 6 * self$plot_font_size
           )
         ) %>% 
-        e_x_axis(show = FALSE) %>% 
-        e_toolbox_feature(feature = "saveAsImage") %>% 
+        e_x_axis(show = FALSE) %>%
+        e_toolbox_feature(feature = c("saveAsImage", "dataView")) %>% 
         e_show_loading(text = "Loading...", color = "#0d6efd")
       
       return(p)
