@@ -15,7 +15,7 @@ box::use(
   clusterProfiler[enrichGO, simplify, gseGO],
   org.Hs.eg.db[org.Hs.eg.db],
   org.Mm.eg.db[org.Mm.eg.db],
-  org.EcK12.eg.db[ org.EcK12.eg.db],
+  org.EcK12.eg.db[org.EcK12.eg.db],
   org.Dm.eg.db[org.Dm.eg.db],
   org.Sc.sgd.db[org.Sc.sgd.db],
   viridis[viridis],

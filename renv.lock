@@ -1,6 +1,6 @@
 {
   "R": {
-    "Version": "4.4.1",
+    "Version": "4.3.2",
     "Repositories": [
       {
         "Name": "BioCsoft",
@@ -156,7 +156,6 @@
       "Package": "DOSE",
       "Version": "3.28.2",
       "Source": "Bioconductor",
-      "Repository": "Bioconductor 3.18",
       "Requirements": [
         "AnnotationDbi",
         "BiocParallel",
@@ -501,7 +500,6 @@
       "Package": "S4Vectors",
       "Version": "0.40.2",
       "Source": "Bioconductor",
-      "Repository": "Bioconductor 3.18",
       "Requirements": [
         "BiocGenerics",
         "R",
@@ -2223,6 +2221,28 @@
       ],
       "Hash": "4eb6bb5d6b95b2e3177f0dd1e7b9ca0e"
     },
+    "org.Dm.eg.db": {
+      "Package": "org.Dm.eg.db",
+      "Version": "3.18.0",
+      "Source": "Bioconductor",
+      "Requirements": [
+        "AnnotationDbi",
+        "R",
+        "methods"
+      ],
+      "Hash": "28ef4e3b633acc6e0cea69af6beb8dc4"
+    },
+    "org.EcK12.eg.db": {
+      "Package": "org.EcK12.eg.db",
+      "Version": "3.18.0",
+      "Source": "Bioconductor",
+      "Requirements": [
+        "AnnotationDbi",
+        "R",
+        "methods"
+      ],
+      "Hash": "f7d1f1fe318a03eac26f39b003bf1b17"
+    },
     "org.Hs.eg.db": {
       "Package": "org.Hs.eg.db",
       "Version": "3.18.0",
@@ -2244,6 +2264,17 @@
         "methods"
       ],
       "Hash": "abded9efdefa42108f268872e15aa8bf"
+    },
+    "org.Sc.sgd.db": {
+      "Package": "org.Sc.sgd.db",
+      "Version": "3.18.0",
+      "Source": "Bioconductor",
+      "Requirements": [
+        "AnnotationDbi",
+        "R",
+        "methods"
+      ],
+      "Hash": "ae84344c1deb17c462be69774867ac2f"
     },
     "patchwork": {
       "Package": "patchwork",
