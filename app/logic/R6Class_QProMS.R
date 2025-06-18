@@ -1292,7 +1292,7 @@ QProMS <- R6Class(
       }
       return(p)
     },
-    plot_multi_scatter = function(gene_names_h) {
+    plot_multi_scatter = function(gene_names_h, x_filter, y_filter) {
       
       if(is.null(self$normalized_data)){return(NULL)}
       ## create the resouce path for trelliscope
@@ -1302,12 +1302,15 @@ QProMS <- R6Class(
       combinations <- t(combn(self$expdesign %>% pull(label), 2))
       colnames(combinations) <- c("x", "y")
       combinations <- as_tibble(combinations)
+      subset <- combinations %>% 
+        filter(x %in% x_filter) %>% 
+        filter(y %in% y_filter) 
       if(is.null(gene_names_h)){
         names <- ""
       } else {
         names <- paste(gene_names_h, collapse = ":")
       }
-      p <- combinations %>% 
+      p <- subset %>% 
         mutate(highlights_names = names) %>%
         mutate(plots_panel = panel_lazy(self$plot_single_scatter)) %>% 
         as_trelliscope_df(name = "Scatter",
