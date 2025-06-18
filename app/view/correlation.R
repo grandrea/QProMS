@@ -53,6 +53,20 @@ ui <- function(id) {
             label = "Correlation method",
             choices = c("Pearson" = "pearson", "Kendall" = "kendall", "Spearman" = "spearman"),
             selected = "pearson"
+          ),
+          selectInput(
+            inputId = ns("x_filter"),
+            label = "Scatter plot X",
+            choices = NULL,
+            selected = NULL,
+            multiple = TRUE
+          ),
+          selectInput(
+            inputId = ns("y_filter"),
+            label = "Scatter plot Y",
+            choices = NULL,
+            selected = NULL,
+            multiple = TRUE
           )
         )
       )
@@ -67,6 +81,14 @@ server <- function(id, r6) {
     observe({
       watch("session")
       updateSelectInput(inputId = "correlation_input", selected = r6$cor_method)
+    })
+    
+    observe({
+      watch("session")
+      if(!is.null(r6$expdesign)) {
+        updateSelectInput(inputId = "x_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[1]])
+        updateSelectInput(inputId = "y_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[2]])
+      }
     })
     
     observeEvent(input$update, {
@@ -103,8 +125,14 @@ server <- function(id, r6) {
         data <- r6$print_table(r6$imputed_data, df = TRUE)
         highlights <- data[gene_selected(), ] %>% pull(gene_names)
       }
-      r6$plot_multi_scatter(highlights)
+      x <- isolate(input$x_filter)
+      y <- isolate(input$y_filter)
+      
+      if (length(x) > 0 && length(y) > 0 && !identical(x, y)) {
+        if ((length(x) == 1 && length(y) == 1 && x != y) || length(x) > 1 || length(y) > 1) {
+          r6$plot_multi_scatter(highlights, x_filter = x, y_filter = y)
+        }
+      }
     })
-
   })
 }
