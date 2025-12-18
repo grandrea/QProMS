@@ -1,27 +1,33 @@
 name: Rhino Test
+
 on: push
+
 permissions:
   contents: read
+
 jobs:
   main:
     name: Run linters and tests
     runs-on: ubuntu-22.04
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        
+
       - name: Install ImageMagick
         run: |
           sudo apt-get update
-          sudo apt-get install -y libmagick++-dev imagemagick  libmagick++-6.q16-8 # Install ImageMagick libraries `
-     
+          sudo apt-get install -y libmagick++-dev imagemagick libmagick++-6.q16-8
+
       - name: Setup system dependencies
         run: |
           packages=(
             # List each package on a separate line.
           )
           sudo apt-get update
-          sudo apt-get install -y libglpk40 libglpk-dev  # Install GLPK
+          sudo apt-get install -y libglpk40 libglpk-dev
           sudo apt-get install --yes "${packages[@]}"
 
       - name: Setup R
@@ -37,50 +43,51 @@ jobs:
         with:
           node-version: 20
 
-     # - name: Lint R
-     #   if: always()
-     #   shell: Rscript {0}
-     #   run: rhino::lint_r()
+      # - name: Lint R
+      #   if: always()
+      #   shell: Rscript {0}
+      #   run: rhino::lint_r()
 
-      - name: Lint JavaScript
-        if: always()
-        shell: Rscript {0}
-        run: rhino::lint_js()
+      # - name: Lint JavaScript
+      #   if: always()
+      #   shell: Rscript {0}
+      #   run: rhino::lint_js()
 
-      - name: Lint Sass
-        if: always()
-        shell: Rscript {0}
-        run: rhino::lint_sass()
+      # - name: Lint Sass
+      #   if: always()
+      #   shell: Rscript {0}
+      #   run: rhino::lint_sass()
 
-      - name: Build JavaScript
-        if: always()
-        shell: Rscript {0}
-        run: rhino::build_js()
+      # - name: Build JavaScript
+      #   if: always()
+      #   shell: Rscript {0}
+      #   run: rhino::build_js()
 
-      - name: Build Sass
-        if: always()
-        shell: Rscript {0}
-        run: rhino::build_sass()
+      # - name: Build Sass
+      #   if: always()
+      #   shell: Rscript {0}
+      #   run: rhino::build_sass()
 
-     # - name: Run R unit tests
-     #   if: always()
-     #   shell: Rscript {0}
-     #   run: rhino::test_r()
+      # - name: Run R unit tests
+      #   if: always()
+      #   shell: Rscript {0}
+      #   run: rhino::test_r()
 
-      - name: Install qproms package
-        if: always()
-        shell: Rscript {0}
-        run: |
-          install.packages("remotes")
-          remotes::install_local(".")
+      # - name: Install qproms package
+      #   if: always()
+      #   shell: Rscript {0}
+      #   run: |
+      #     install.packages("remotes")
+      #     remotes::install_local(".")
 
-      - name: Run Cypress end-to-end tests
-        if: always()
-        uses: cypress-io/github-action@v6
-        with:
-          working-directory: .
-          start: Rscript -e "library(qproms); run_qproms(port = 3333)"
-          project: tests
-          wait-on: 'http://localhost:3333/'
-          wait-on-timeout: 60
+      # - name: Run Cypress end-to-end tests
+      #   if: always()
+      #   uses: cypress-io/github-action@v6
+      #   with:
+      #     working-directory: .
+      #     start: Rscript -e "library(qproms); run_qproms(port = 3333)"
+      #     project: tests
+      #     wait-on: 'http://localhost:3333/'
+      #     wait-on-timeout: 60
+
 
