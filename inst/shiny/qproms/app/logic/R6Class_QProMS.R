@@ -30,10 +30,12 @@ box::use(
   echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords]
 )
 
-box::use(
-  app/static/inputs_type_lists,
-  app/static/contaminants
-)
+app_dir   <- system.file("shiny/qproms", package = "qproms")
+static_dir <- file.path(app_dir, "app/static")
+
+source(file.path(static_dir, "inputs_type_lists.R"), chdir = TRUE)
+source(file.path(static_dir, "contaminants.R"),      chdir = TRUE)
+
 
 #' @export
 QProMS <- R6Class(

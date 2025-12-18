@@ -46,12 +46,21 @@ suppressPackageStartupMessages(library(reactable))
 ```{r}
 #| label: "upload session"
 
-box::use(app/logic/R6Class_QProMS)
-r6 <- R6Class_QProMS$QProMS$new()
-# Remove the comment below to download the report locally
-#r6$loading_parameters(input_path = here("app/logic/QProMS_session_internal.rds"), self = r6)
-# This line loads the report from the server path (for production use)
-r6$loading_parameters(input_path = "/srv/shiny-server/app/logic/QProMS_session_internal.rds", self = r6)
+app_dir   <- system.file("shiny/qproms", package = "qproms")
+logic_dir <- file.path(app_dir, "app/logic")
+
+old_wd <- getwd()
+on.exit(setwd(old_wd), add = TRUE)
+setwd(app_dir)
+
+source(file.path(logic_dir, "R6Class_QProMS.R"), chdir = TRUE)
+
+r6 <- QProMS$new()
+
+rds_path <- file.path(logic_dir, "QProMS_session_internal.rds")
+r6$loading_parameters(input_path = rds_path, self = r6)
+
+
 ```
 
 ```{r}
