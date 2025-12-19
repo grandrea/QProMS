@@ -8,8 +8,8 @@ Description: Shiny application for quantitative proteomics analysis
     packaged as an R package and runnable with a single function.
 License: GPL-3
 Depends: R (>= 4.3)
-Imports: shiny, rhino, gargoyle, shinyalert,echarts4r,trelliscopejs,trelliscope,reactable,rhandsontable,esquisse,viridis,quarto,vsn,rbioapi,OmnipathR,clusterProfiler,org.Hs.eg.db,org.Mm.eg.db,org.EcK12.eg.db,org.Dm.eg.db,org.Sc.sgd.db,heatmaply,rlist,openxlsx
-Remotes: trelliscope/trelliscope
+Imports: shiny, rhino, gargoyle, shinyalert,echarts4r,trelliscopejs,trelliscope,reactable,rhandsontable,esquisse,viridis,quarto,vsn,rbioapi,OmnipathR,clusterProfiler,org.Hs.eg.db,org.Mm.eg.db,org.EcK12.eg.db,org.Dm.eg.db,org.Sc.sgd.db,heatmaply,rlist,openxlsx,ggtree
+Remotes: trelliscope/trelliscope,YuLab-SMU/ggtree
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
