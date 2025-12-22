@@ -19,3 +19,4 @@ junk/
 # Build temporanei
 qproms_*.tar.gz
 
+.github/
