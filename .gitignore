@@ -1,8 +1,21 @@
-.Rproj.user
+# RStudio / History
 .Rhistory
 .RData
-.Ruserdata
-omnipathr-log
-prove.R
-.Rhistory
-.Rhistory
+.Rproj.user/
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Ambiente
+junk/
+.renvignore
+.rscignore
+.lintr
+
+# OS X
+.DS_Store
+
+# Build temporanei
+qproms_*.tar.gz
+
