@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, fluidPage, titlePanel, renderTable, tableOutput, em, h2, hr, strong, tags, fluidRow, column, h4, p, wellPanel, NS, selectInput, br, actionButton, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI],
+  shiny[moduleServer, fluidPage, titlePanel, renderTable, tableOutput, em, h2, h5, hr, strong, tags, fluidRow, column, h4, p, wellPanel, NS, selectInput, br, actionButton, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI],
   bslib[page_fillable, card, card_header, card_body, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button],
   reactable[reactableOutput, renderReactable, reactable, colDef],
   rhandsontable[rHandsontableOutput, renderRHandsontable, hot_to_r],
@@ -50,14 +50,12 @@ ui <- function(id) {
           uiOutput(ns("file_info"))
         )
       ),
-      br(),
       card(
         card_header("Required metadata columns"),
         card_body(
           tableOutput(ns("metadata_table"))
         )
       ),
-      br(),
       card(
         card_header("Supported intensity columns"),
         card_body(
@@ -65,7 +63,6 @@ ui <- function(id) {
           tags$small(em("Sample names must be consistent across intensity columns."))
         )
       ),
-      br(),
       accordion(
         accordion_panel(
           title = "Software-specific notes",
@@ -94,9 +91,35 @@ ui <- function(id) {
                 tags$li("Excel files with formatting"),
                 tags$li("Incorrect field separators"),
                 tags$li("Duplicated sample names"),
-                tags$li("Removal of QC columns (Reverse / contaminant)")
+                tags$li("Removal of QC columns (Reverse / contaminant)"),
+                tags$li("Less then 3 replicate for each condition will not allow for statistical analysis.")
               )
             )
+          )
+        )
+      ),
+      br(),
+      card(
+        class="border border-info",
+        card_header("Custom input tables"),
+        card_body(
+          p(
+            "If your data were generated using a different software, you can upload a custom table. ",
+            "Only a minimal set of columns is required."
+          ),
+          h5("Required columns"),
+          tags$ul(
+            tags$li(
+              strong("Gene"),
+              " – Gene identifier used for annotation and downstream analyses. Must be unique!"
+            ),
+            tags$li(
+              strong("Intensity columns (one per sample)"),
+              " – Quantitative values for each sample. Column names are interpreted as sample identifiers."
+            )
+          ),
+          tags$small(
+            em("Additional columns are allowed and will be ignored if not used by the analysis.")
           )
         )
       )
