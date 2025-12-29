@@ -57,7 +57,7 @@ ui <- function(id) {
     nav_spacer(),
     nav_panel(title = "", value = "Save Results", icon = icon("download"), download$ui(ns("download"))),
     nav_panel(title = "", value = "Settings", icon = icon("gear"), settings$ui(ns("settings"))),
-    nav_panel(title = "", value = "Help", icon = icon("info"), help$ui(ns("help")))
+    nav_panel(title = "", value = "Help", icon = icon("question"), help$ui(ns("help")))
   )
 }
 

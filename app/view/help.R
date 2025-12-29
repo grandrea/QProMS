@@ -70,31 +70,15 @@ ui <- function(id) {
         )
       ),
       br(),
-      fluidRow(
-        column(
-          width = 6,
-          card(
-            card_header("Valid table example"),
-            card_body(
-              p("Simplified preview of a correctly formatted table."),
-              tableOutput(ns("example_table"))
-            )
-          )
-        ),
-        column(
-          width = 6,
-          card(
-            card_header("Common issues"),
-            card_body(
-              tags$ul(
-                tags$li("Manually renamed columns"),
-                tags$li("Excel files with formatting"),
-                tags$li("Incorrect field separators"),
-                tags$li("Duplicated sample names"),
-                tags$li("Removal of QC columns (Reverse / contaminant)"),
-                tags$li("Less then 3 replicate for each condition will not allow for statistical analysis.")
-              )
-            )
+      card(
+        card_header("Common issues"),
+        card_body(
+          tags$ul(
+            tags$li("Manually renamed columns"),
+            tags$li("Excel files with formatting"),
+            tags$li("Incorrect field separators"),
+            tags$li("Duplicated sample names"),
+            tags$li("Less then 3 replicate for each condition will not allow for statistical analysis.")
           )
         )
       ),
@@ -151,12 +135,13 @@ server <- function(id, r6, main_session) {
           tags$li("Standard FragPipe output")
         ),
         "DIA-NN" = tags$ul(
-          tags$li("Format: .tsv"),
-          tags$li("File: report.tsv"),
+          tags$li("Format: .txt"),
+          tags$li("File: report.unique_genes_matrix.txt"),
           tags$li("Samples are identified via the .mzML filename")
         ),
         "Spectronaut" = tags$ul(
-          tags$li("Format: .csv / .tsv"),
+          tags$li("Format: .tsv"),
+          tags$li("File: Report.tsv"),
           tags$li("Protein group–level report")
         )
       )
@@ -193,7 +178,7 @@ server <- function(id, r6, main_session) {
         input$software,
         "MaxQuant" = tags$ul(
           tags$li("Support for LFQ, iBAQ, and raw intensity values"),
-          tags$li("Reverse and Potential contaminant columns are used for QC filtering")
+          tags$li("Reverse Potential contaminant and Only identified by site columns are used for QC filtering")
         ),
         "FragPipe" = tags$ul(
           tags$li("Support for MaxLFQ Intensity and Intensity values"),
@@ -210,15 +195,6 @@ server <- function(id, r6, main_session) {
       )
     })
     
-    output$example_table <- renderTable({
-      data.frame(
-        Gene = c("TP53", "EGFR"),
-        ProteinID = c("P04637", "P00533"),
-        Sample_1 = c(1.2e6, 8.5e5),
-        Sample_2 = c(1.1e6, 9.1e5)
-      )
-    
-  })
   })
 }
 
