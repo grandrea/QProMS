@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, br, actionButton, observeEvent, updateSelectInput, observe, isolate, icon, reactive],
+  shiny[moduleServer, NS, selectInput, br, actionButton, observeEvent, updateSelectInput, observe, isolate, icon, reactive, reactiveVal],
   bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, tooltip, input_switch],
   echarts4r[echarts4rOutput, renderEcharts4r],
   trelliscope[trelliscopeOutput, renderTrelliscope],
@@ -83,16 +83,21 @@ server <- function(id, r6) {
       updateSelectInput(inputId = "correlation_input", selected = r6$cor_method)
     })
     
+    only_first_time_trigger <- reactiveVal(TRUE)
+    
     observe({
-      watch("session")
-      if(!is.null(r6$expdesign)) {
-        updateSelectInput(inputId = "x_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[1]])
-        updateSelectInput(inputId = "y_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[2]])
+      watch("plot")
+      if(!is.null(r6$expdesign) & only_first_time_trigger()) {
+        if(nrow(r6$expdesign) > 1) {
+          updateSelectInput(inputId = "x_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[1]])
+          updateSelectInput(inputId = "y_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[2]])
+        }
       }
     })
     
     observeEvent(input$update, {
       r6$cor_method <- input$correlation_input
+      only_first_time_trigger(FALSE)
       trigger("plot")
     })
     

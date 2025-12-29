@@ -327,9 +327,11 @@ QProMS <- R6Class(
         
         if (groups_with_3_or_more >= 2) {
           results$condition_check <- "success The 'condition' column contains at least 2 groups with at least 3 replicates each."
+          results$condition_check2 <- "info All the statistics pages will be available."
         } else {
-          results$condition_check <- "danger The 'condition' column does not contains at least 2 groups with at least 3 replicates each."
-          validation_status <- FALSE
+          results$condition_check <- "warning The 'condition' column does not contains at least 2 groups with at least 3 replicates each."
+          results$condition_check2 <- "info The statistics pages will NOT be available."
+          ## qui devo inserire il controllo che determini se mettere o meno le pagine statistiche tipo "with_statistics"
         }
         
         groups_with_less_than_3 <- condition_groups %>%
@@ -1041,6 +1043,7 @@ QProMS <- R6Class(
     plot_pca = function(view_3d = FALSE) {
       
       if(is.null(self$imputed_data)){return(NULL)}
+      if(nrow(self$expdesign) < 4){return(self$plot_empty_message("not enough samples to compute PC"))}
       
       ## generate a matrix from imputed intensiy
       mat <- self$imputed_data %>%
@@ -1057,7 +1060,6 @@ QProMS <- R6Class(
       ## calculate persentage of each PC
       pca_var <- pca$sdev^2
       pca_var_perc <- round(pca_var/sum(pca_var)*100, 1)
-      
       ## create a data.frame for the first 3 PC
       pca_table <- data.frame(
         label = rownames(pca$x),
@@ -1161,6 +1163,7 @@ QProMS <- R6Class(
     plot_correlation = function() {
       
       if(is.null(self$normalized_data)){return(NULL)}
+      if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the correlation matrix."))}
       
       if(self$is_imp){
         data <- self$imputed_data
@@ -1214,6 +1217,7 @@ QProMS <- R6Class(
     plot_single_scatter = function(x, y, highlights_names) {
       
       if(is.null(self$normalized_data)){return(NULL)}
+      if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the plot."))}
       
       if(self$is_imp){
         data <- self$imputed_data
