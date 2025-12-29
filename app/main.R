@@ -1,5 +1,5 @@
 box::use(
-  shiny[div, moduleServer, NS, strong, icon],
+  shiny[div, moduleServer, NS, strong, icon, tags],
   bslib[page_navbar, page_sidebar, nav_panel, nav_item, sidebar, nav_spacer, page_fluid],
 )
 
@@ -17,6 +17,7 @@ box::use(
   app/view/gsea,
   app/view/settings,
   app/view/download,
+  app/view/help,
 )
 
 box::use(
@@ -28,13 +29,21 @@ ui <- function(id) {
   ns <- NS(id)
   page_navbar(
     id = ns("top_navigation"),
-    title = strong("QProMS"),
+    title = tags$a("QProMS", href = "?", style = "text-decoration: none; color: inherit;"),
     sidebar = NULL,
+    bg = "#6EC1E4",
+    gap = "1rem",
     header = list(
-      # use_empty_state()
+      # use_empty_state(),
+      tags$head(
+        tags$link(
+          href = "https://fonts.googleapis.com/css2?family=Tomorrow:wght@400;700&display=swap",
+          rel = "stylesheet"
+        )
+      )
     ),
     nav_spacer(),
-    nav_panel(title = "Home", home$ui(ns("home"))),
+    nav_panel(title = "Home", home$ui(ns("home")), style = "padding: 0 !important; margin: -1px;"),
     nav_panel(title = "Design", upload$ui(ns("upload"))),
     nav_panel(title = "Preprocessing", preprocessing$ui(ns("preprocessing"))),
     nav_panel(title = "PCA", pca$ui(ns("pca"))),
@@ -47,7 +56,8 @@ ui <- function(id) {
     nav_panel(title = "GSEA", gsea$ui(ns("gsea"))),
     nav_spacer(),
     nav_panel(title = "", value = "Save Results", icon = icon("download"), download$ui(ns("download"))),
-    nav_panel(title = "", value = "Settings", icon = icon("gear"), settings$ui(ns("settings")))
+    nav_panel(title = "", value = "Settings", icon = icon("gear"), settings$ui(ns("settings"))),
+    nav_panel(title = "", value = "Help", icon = icon("question"), help$ui(ns("help")))
   )
 }
 
@@ -71,6 +81,7 @@ server <- function(id) {
     ora$server("ora", r6 = object)
     gsea$server("gsea", r6 = object)
     download$server("download", r6 = object)
-    settings$server("settings", r6 = object)
+    settings$server("settings", r6 = object, main_session = session)
+    help$server("help", r6 = object, main_session = session)
   })
 }
