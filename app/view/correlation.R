@@ -84,10 +84,15 @@ server <- function(id, r6) {
     })
     
     observe({
-      watch("session")
+      watch("genes")
       if(!is.null(r6$expdesign)) {
-        updateSelectInput(inputId = "x_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[1]])
-        updateSelectInput(inputId = "y_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[2]])
+        if(nrow(r6$expdesign) > 1) {
+          updateSelectInput(inputId = "x_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[1]])
+          updateSelectInput(inputId = "y_filter", choices = r6$expdesign$label, selected = r6$expdesign$label[[2]])
+        } else {
+          updateSelectInput(inputId = "x_filter", choices = NULL, selected = NULL)
+          updateSelectInput(inputId = "y_filter", choices = NULL, selected = NULL)
+        }
       }
     })
     

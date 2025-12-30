@@ -111,7 +111,7 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, r6) {
+server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     init("heatmap")

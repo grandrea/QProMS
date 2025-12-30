@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, observe, downloadButton, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate],
+  shiny[moduleServer, observe, downloadButton, updateCheckboxGroupInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate],
   bslib[page_fillable, layout_columns, card, card_header, card_body, accordion, accordion_panel, nav_select, tooltip],
   gargoyle[init, watch, trigger],
   quarto[quarto_render],
@@ -115,7 +115,44 @@ server <- function(id, r6) {
     
     observe({
       watch("genes")
-      updateSelectInput(inputId = "add_metadata", choices = colnames(r6$raw_data_unique), selected = NULL)
+      updateSelectInput(
+        inputId = "add_metadata",
+        choices = colnames(r6$raw_data_unique),
+        selected = NULL
+      )
+      if (!r6$with_statistics) {
+        updateCheckboxGroupInput(
+          inputId = "report_section",
+          choices = c("Preprocessing", "PCA", "Correlation", "Rank"),
+          selected = c("Preprocessing", "PCA", "Correlation", "Rank")
+        )
+      } else {
+        updateCheckboxGroupInput(
+          inputId = "report_section",
+          choices = c(
+            "Preprocessing",
+            "PCA",
+            "Correlation",
+            "Rank",
+            "Volcano",
+            "Heatmap",
+            "Network",
+            "ORA",
+            "GSEA"
+          ),
+          selected = c(
+            "Preprocessing",
+            "PCA",
+            "Correlation",
+            "Rank",
+            "Volcano",
+            "Heatmap",
+            "Network",
+            "ORA",
+            "GSEA"
+          )
+        )
+      }
     })
     
     output$download_table <- downloadHandler(
@@ -147,6 +184,7 @@ server <- function(id, r6) {
               Sys.sleep(1)
               params <- c("Preprocessing", "PCA", "Correlation", "Rank",
                           "Volcano", "Heatmap", "Network", "ORA", "GSEA")
+              
               incProgress(1/5, message = "Save session")
               Sys.sleep(1)
               r6$download_parameters(handler_file = "app/logic/QProMS_session_internal.rds", r6class = r6)
