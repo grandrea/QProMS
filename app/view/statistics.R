@@ -60,8 +60,8 @@ ui <- function(id) {
             label = "Test type",
             choices = c(
               "Welch's T-test (Default)" = "welch",
-              "Student's T-test" = "student",
-              "limma"
+              "Student's t-test" = "student",
+              "Moderated t-test" = "limma"
               # "Wilcoxon test" = "wilcox" # remove beacuse not work properly.
             ), 
             selected = "welch" 

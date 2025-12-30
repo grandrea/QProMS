@@ -1687,11 +1687,16 @@ QProMS <- R6Class(
       data <- if (self$is_imp) self$imputed_data else self$normalized_data
       cond <- unique(str_split_1(contrast, "_vs_"))
       
-      p <- data %>% 
+      data_p <- data %>% 
         filter(gene_names == gene) %>% 
         filter(condition %in% cond) %>%
         group_by(condition) %>%
-        drop_na() %>% 
+        drop_na()
+      
+      min_plot <- round(min(data_p %>% pull(intensity), na.rm = TRUE) - 1, 0)
+      max_plot <- round(max(data_p %>% pull(intensity), na.rm = TRUE) + 1, 0)
+
+      p <- data_p %>% 
         e_charts(renderer = self$plot_format) %>%
         e_boxplot(
           intensity,
@@ -1699,7 +1704,13 @@ QProMS <- R6Class(
           outliers = FALSE,
           itemStyle = list(borderWidth = 2)
         ) %>%
-        e_legend(textStyle = list(fontSize = self$plot_font_size)) %>%
+        e_y_axis(min = min_plot, max = max_plot) %>%
+        e_legend(show = FALSE) %>%
+        e_title(
+          gene,
+          left = "center",
+          textStyle = list(fontSize = self$plot_font_size)
+        ) %>%
         e_y_axis(
           name = "log2 Intensity",
           nameLocation = "center",
