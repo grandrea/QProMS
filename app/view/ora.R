@@ -192,7 +192,7 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, r6) {
+server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     observe({
@@ -229,7 +229,7 @@ server <- function(id, r6) {
     
     observe({
       watch("genes")
-      if(!is.null(r6$expdesign)) {
+      if(!is.null(r6$expdesign) & !is.null(input$by_cond_input)) {
         if(input$by_cond_input){
           updateSelectInput(inputId = "target", choices = unique(r6$expdesign$condition))
         } else {

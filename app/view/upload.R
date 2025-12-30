@@ -3,7 +3,7 @@ box::use(
   bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button, nav_insert],
   reactable[reactableOutput, renderReactable, reactable, colDef],
   rhandsontable[rHandsontableOutput, renderRHandsontable, hot_to_r],
-  purrr[map, set_names, imap, keep_at, flatten_chr, discard_at],
+  purrr[map, set_names, imap, keep_at, flatten_chr, discard_at, walk],
   stringr[word, str_remove],
   dplyr[`%>%`, filter, select],
   gargoyle[init, watch, trigger],
@@ -12,7 +12,44 @@ box::use(
 box::use(
   app/view/statistics,
   app/view/heatmap,
+  app/view/network,
+  app/view/ora,
+  app/view/gsea,
 )
+
+panels <- list(
+  Volcano = list(
+    target = "Rank",
+    title  = "Volcano",
+    ui     = statistics$ui,
+    ns     = "statistics"
+  ),
+  Heatmap = list(
+    target = "Volcano",
+    title  = "Heatmap",
+    ui     = heatmap$ui,
+    ns     = "heatmap"
+  ),
+  Network = list(
+    target = "Heatmap",
+    title  = "Network",
+    ui     = network$ui,
+    ns     = "network"
+  ),
+  ORA = list(
+    target = "Network",
+    title  = "ORA",
+    ui     = ora$ui,
+    ns     = "ora"
+  ),
+  GSEA = list(
+    target = "ORA",
+    title  = "GSEA",
+    ui     = gsea$ui,
+    ns     = "gsea"
+  )
+)
+
 
 #' @export
 ui <- function(id) {
@@ -238,38 +275,31 @@ server <- function(id, r6, main_session) {
       r6$shiny_wrap_workflow()
       trigger("plot", "genes")
       nav_select("top_navigation", "Preprocessing", session = main_session)
-      if(r6$with_statistics) {
-        nav_insert(
-          "top_navigation",
-          target = "Rank",
-          select = FALSE,
-          session = main_session,
-          nav_panel(
-            title = "Volcano",
-            class = "html-fill-item html-fill-container bslib-gap-spacing",
-            style = "--bslib-navbar-margin:0; padding:0",
-            statistics$ui(ns("statistics"))
-          ) 
-        )
-        nav_insert(
-          "top_navigation",
-          target = "Volcano",
-          select = FALSE,
-          session = main_session,
-          nav_panel(
-            title = "Heatmap",
-            class = "html-fill-item html-fill-container bslib-gap-spacing",
-            style = "--bslib-navbar-margin:0; padding:0",
-            heatmap$ui(ns("heatmap"))
-          ) 
+      if (r6$with_statistics) {
+        purrr::walk(
+          panels,
+          ~ nav_insert(
+            "top_navigation",
+            target  = .x$target,
+            select  = FALSE,
+            session = main_session,
+            nav_panel(
+              title = .x$title,
+              class = "html-fill-item html-fill-container bslib-gap-spacing",
+              style = "--bslib-navbar-margin:0; padding:0",
+              .x$ui(ns(.x$ns))
+            )
+          )
         )
       } else {
-        nav_remove("top_navigation", target = "Volcano", session = main_session)
-        nav_remove("top_navigation", target = "Heatmap", session = main_session)
+        purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
       }
     })
     
     statistics$server("statistics", r6 = r6, main_session = main_session)
-    statistics$server("heatmap", r6 = r6, main_session = main_session)
+    heatmap$server("heatmap", r6 = r6, main_session = main_session)
+    network$server("network", r6 = r6, main_session = main_session)
+    ora$server("ora", r6 = r6, main_session = main_session)
+    gsea$server("gsea", r6 = r6, main_session = main_session)
   })
 }
