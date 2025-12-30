@@ -1,12 +1,17 @@
 box::use(
   shiny[moduleServer, NS, selectInput, br, actionButton, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI],
-  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button],
+  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button, nav_insert],
   reactable[reactableOutput, renderReactable, reactable, colDef],
   rhandsontable[rHandsontableOutput, renderRHandsontable, hot_to_r],
   purrr[map, set_names, imap, keep_at, flatten_chr, discard_at],
   stringr[word, str_remove],
   dplyr[`%>%`, filter, select],
   gargoyle[init, watch, trigger],
+)
+
+box::use(
+  app/view/statistics,
+  app/view/heatmap,
 )
 
 #' @export
@@ -233,7 +238,38 @@ server <- function(id, r6, main_session) {
       r6$shiny_wrap_workflow()
       trigger("plot", "genes")
       nav_select("top_navigation", "Preprocessing", session = main_session)
+      if(r6$with_statistics) {
+        nav_insert(
+          "top_navigation",
+          target = "Rank",
+          select = FALSE,
+          session = main_session,
+          nav_panel(
+            title = "Volcano",
+            class = "html-fill-item html-fill-container bslib-gap-spacing",
+            style = "--bslib-navbar-margin:0; padding:0",
+            statistics$ui(ns("statistics"))
+          ) 
+        )
+        nav_insert(
+          "top_navigation",
+          target = "Volcano",
+          select = FALSE,
+          session = main_session,
+          nav_panel(
+            title = "Heatmap",
+            class = "html-fill-item html-fill-container bslib-gap-spacing",
+            style = "--bslib-navbar-margin:0; padding:0",
+            heatmap$ui(ns("heatmap"))
+          ) 
+        )
+      } else {
+        nav_remove("top_navigation", target = "Volcano", session = main_session)
+        nav_remove("top_navigation", target = "Heatmap", session = main_session)
+      }
     })
     
+    statistics$server("statistics", r6 = r6, main_session = main_session)
+    statistics$server("heatmap", r6 = r6, main_session = main_session)
   })
 }
