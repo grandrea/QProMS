@@ -16,7 +16,7 @@ box::use(app/static/contaminants)
 
 r6 <- R6Class_QProMS$QProMS$new()
 # r6$loading_data(input_path = "app/static/proteinGroups.txt", input_name = "test")
-r6$loading_data(input_path = "app/static/combined_protein.tsv", input_name = "test")
+r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/combined_protein.tsv", input_name = "test")
 a <- r6$loading_parameters(input_path = "/Users/bedin.fabio/Desktop/QProMS_parameters_2024-09-04.yaml", r6)
 msg <- r6$identify_table_type()
 r6$create_summary_table()
