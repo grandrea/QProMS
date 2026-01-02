@@ -12,7 +12,7 @@ box::use(
   stats[sd, runif, rnorm, prcomp, cor, na.omit, t.test, p.adjust, wilcox.test, model.matrix, aov, hclust, dist, cutree, as.dendrogram, median, qt],
   rbioapi[rba_string_interactions_network],
   OmnipathR[get_complex_genes, import_omnipath_complexes],
-  clusterProfiler[enrichGO, simplify, gseGO],
+  clusterProfiler[enrichGO, simplify, gseGO, enrichKEGG, bitr, enrichWP],
   org.Hs.eg.db[org.Hs.eg.db],
   org.Mm.eg.db[org.Mm.eg.db],
   org.EcK12.eg.db[org.EcK12.eg.db],
@@ -2340,22 +2340,23 @@ QProMS <- R6Class(
       }
       return(data)
     },
-    go_ora = function(list_from, focus, ontology, simplify_thr, alpha, p_adj_method, background) {
+    go_ora = function(list_from, focus, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size, background) {
       if(is.null(focus)){return(NULL)}
-      orgdb <- if (self$organism == "human") {
-        org.Hs.eg.db
-      } else if (self$organism == "mouse") {
-        org.Mm.eg.db
-      } else if (self$organism == "ecoli") {
-        org.EcK12.eg.db  
-      } else if (self$organism == "drosophila") {
-        org.Dm.eg.db     
-      } else if (self$organism == "buddingyast") {
-        org.Sc.sgd.db   
-      } else {
-        org.Mm.eg.db
-      }
       
+      org_map <- list(
+        human        = list(orgdb = org.Hs.eg.db,     kegg = "hsa",  wiki = "Homo sapiens"),
+        mouse        = list(orgdb = org.Mm.eg.db,     kegg = "mmu",  wiki = "Mus musculus"),
+        ecoli        = list(orgdb = org.EcK12.eg.db,  kegg = "ecoj", wiki = "Escherichia coli"),
+        drosophila   = list(orgdb = org.Dm.eg.db,     kegg = "dme",  wiki = "Drosophila melanogaster"),
+        buddingyast  = list(orgdb = org.Sc.sgd.db,    kegg = "sce",  wiki = "Saccharomyces cerevisiae")
+      )
+      
+      org_info <- org_map[[self$organism]]
+      if (is.null(org_info)) return(NULL)
+      
+      orgdb     <- org_info$orgdb
+      kegg_org  <- org_info$kegg
+      wiki_org  <- org_info$wiki
       
       if (list_from == "univariate") {
         groupped_data <- map(focus, ~ self$make_ora_list_internal(focus = .x)) %>% 
@@ -2398,16 +2399,61 @@ QProMS <- R6Class(
         uni <- NULL
       }
       
-      self$ora_result_list <- map(gene_vector, possibly(~ enrichGO(
-        gene = .x,
-        OrgDb = orgdb,
-        keyType = 'SYMBOL',
-        ont = ontology,
-        pAdjustMethod = p_adj_method,
-        universe = uni,
-        readable = TRUE) %>% 
-          clusterProfiler::filter(p.adjust < alpha) %>% 
-          simplify(cutoff = simplify_thr), otherwise = NULL))
+      if (database == "GO") {
+        self$ora_result_list <- map(gene_vector, possibly(~ enrichGO(
+          gene = .x,
+          OrgDb = orgdb,
+          keyType = 'SYMBOL',
+          ont = ontology,
+          pAdjustMethod = p_adj_method,
+          universe = uni,
+          minGSSize = min_gs_size,
+          maxGSSize = max_gs_size,
+          readable = TRUE) %>% 
+            clusterProfiler::filter(p.adjust < alpha) %>% 
+            simplify(cutoff = simplify_thr), otherwise = NULL))
+      }
+      
+      if (database == "KEGG") {
+        entrez <- map(
+          gene_vector,
+          ~ bitr(
+            .x,
+            fromType = "SYMBOL",
+            toType   = "ENTREZID",
+            OrgDb    = orgdb
+          ) %>% pull(ENTREZID)
+        )
+        self$ora_result_list <- map(entrez, possibly(~ enrichKEGG(
+          gene = .x,
+          organism = kegg_org,
+          keyType = 'kegg',
+          pAdjustMethod = p_adj_method,
+          universe = uni,
+          minGSSize = min_gs_size,
+          maxGSSize = max_gs_size) %>% 
+            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+      }
+      
+      if (database == "WikiPathways") {
+        entrez <- map(
+          gene_vector,
+          ~ bitr(
+            .x,
+            fromType = "SYMBOL",
+            toType   = "ENTREZID",
+            OrgDb    = orgdb
+          ) %>% pull(ENTREZID)
+        )
+        self$ora_result_list <- map(entrez, possibly(~ enrichWP(
+          gene = .x,
+          organism = wiki_org,
+          pAdjustMethod = p_adj_method,
+          universe = uni,
+          minGSSize = min_gs_size,
+          maxGSSize = max_gs_size) %>% 
+            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+      }
       
     },
     print_ora_table = function(arranged_with) {

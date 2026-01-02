@@ -17,7 +17,7 @@ box::use(app/static/contaminants)
 r6 <- R6Class_QProMS$QProMS$new()
 # r6$loading_data(input_path = "app/static/proteinGroups.txt", input_name = "test")
 r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/combined_protein.tsv", input_name = "test")
-a <- r6$loading_parameters(input_path = "/Users/bedin.fabio/Desktop/QProMS_parameters_2024-09-04.yaml", r6)
+# a <- r6$loading_parameters(input_path = "/Users/bedin.fabio/Desktop/QProMS_parameters_2024-09-04.yaml", r6)
 msg <- r6$identify_table_type()
 r6$create_summary_table()
 r6$make_expdesign("MaxLFQ Intensity")
@@ -41,14 +41,30 @@ r6$plot_pca(FALSE)
 r6$organism <- "human"
 r6$contrasts <- "xl_vs_non"
 r6$stat_uni_test(test = "xl_vs_non", fc = 1, alpha = 0.05, p_adj_method = "BH", paired_test = FALSE, test_type = "welch")
-a <- plot_volcano(tests = c("gel_vs_ist", "ist_vs_gel"), gene_names_marked = c("PRB3", "PRB1"), TRUE, TRUE)
-trelliscope::view_trelliscope(a)
-r6$clusters_number <- 3
-r6$stat_anova(alpha = 0.05, p_adj_method = "BH")
-r6$make_nodes(list_from = "univariate", focus = "xl_vs_non", "down")
-r6$organism <- "human"
-r6$make_edges("string")
-r6$plot_heatmap(order_by_expdesing = FALSE)
+# a <- r6$plot_volcano(tests = "xl_vs_non", gene_names_marked = NULL, TRUE, TRUE)
+# trelliscope::view_trelliscope(a)
+# r6$clusters_number <- 3
+# r6$stat_anova(alpha = 0.05, p_adj_method = "BH")
+# r6$make_nodes(list_from = "univariate", focus = "xl_vs_non", "down")
+# r6$organism <- "human"
+# r6$make_edges("string")
+# r6$plot_heatmap(order_by_expdesing = FALSE)
+
+r6$go_ora(
+  list_from = "univariate",
+  database = "WikiPathways",
+  focus = c("xl_vs_non_up", "xl_vs_non_down"),
+  ontology = r6$go_ora_term,
+  simplify_thr = r6$go_ora_simplify_thr,
+  alpha = r6$go_ora_alpha,
+  p_adj_method = r6$go_ora_p_adj_method,
+  background = r6$go_ora_background
+)
+
+
+r6$print_ora_table(arranged_with = "fold_enrichment")
+r6$ora_table
+r6$plot_ora_single(focus = "xl_vs_non_down", arrange = "fold_enrichment", show_category = 10)
 
 names(r6)
 get(class(r6))
