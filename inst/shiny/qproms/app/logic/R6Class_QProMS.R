@@ -180,7 +180,7 @@ QProMS <- R6Class(
       })
       
       invisible(self)
-    }
+    },
     
     loading_data = function(input_path, input_name) {
       self$raw_data <- fread(input = input_path) 
