@@ -58,6 +58,8 @@ QProMS <- R6Class(
     plot_font_size = 16,
     palette = "D",
     color_palette = NULL,
+    inputs_type_lists = NULL,
+    contaminants = NULL,
     #################################
     # parameters for data wrangling #
     filtered_data = NULL,
@@ -156,6 +158,30 @@ QProMS <- R6Class(
     pdb_database = NULL,
     ###########
     # Methods #
+    
+    #initialize inputs_type_list and contaminants at runtime
+    initialize = function() {
+      # locate static folder
+      app_dir    <- system.file("shiny/qproms", package = "qproms")
+      static_dir <- file.path(app_dir, "app/static")
+      
+      # load inputs_type_lists into self
+      self$inputs_type_lists <- local({
+        env <- new.env()
+        source(file.path(static_dir, "inputs_type_lists.R"), local = env)
+        env$inputs_type_lists
+      })
+      
+      # load contaminants into self
+      self$contaminants <- local({
+        env <- new.env()
+        source(file.path(static_dir, "contaminants.R"), local = env)
+        env$contaminants
+      })
+      
+      invisible(self)
+    },
+    
     loading_data = function(input_path, input_name) {
       self$raw_data <- fread(input = input_path) 
     },
@@ -210,8 +236,9 @@ QProMS <- R6Class(
     },
     identify_table_type = function() {
       data <- self$raw_data
-      required_columns_list <- inputs_type_lists$metadata_list
-      intensity_patterns_list <- inputs_type_lists$intensity_list
+      inputs_types_list_values <- self$inputs_type_lists
+      required_columns_list <- inputs_types_list_values$metadata_list
+      intensity_patterns_list <- inputs_types_list_values$intensity_list
       table_names <- names(required_columns_list)
       
       error_messages <- list()
@@ -503,8 +530,9 @@ QProMS <- R6Class(
           {if (cont) filter(., `Potential contaminant` != "+") else .} %>%
           {if (oibs) filter(., `Only identified by site` != "+") else .}
       } else {
+        contaminants_list_values = self$contaminants
         cleaned_data <- data %>% 
-          filter(!gene_names %in% contaminants$contaminant_list) 
+          filter(!gene_names %in% contaminants_list_values$contaminant_list) 
       }
       self$filtered_data <- cleaned_data
     },
