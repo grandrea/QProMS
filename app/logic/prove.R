@@ -50,84 +50,38 @@ r6$stat_uni_test(test = "xl_vs_non", fc = 1, alpha = 0.05, p_adj_method = "BH", 
 # r6$make_edges("string")
 # r6$plot_heatmap(order_by_expdesing = FALSE)
 
-r6$go_ora(
-  list_from = "univariate",
+# r6$go_ora(
+#   list_from = "univariate",
+#   database = "KEGG",
+#   focus = "xl_vs_non_up",
+#   ontology = r6$go_ora_term,
+#   simplify_thr = r6$go_ora_simplify_thr,
+#   alpha = r6$go_ora_alpha,
+#   p_adj_method = r6$go_ora_p_adj_method,min_gs_size = 10,max_gs_size = 500,
+#   background = r6$go_ora_background
+# )
+# 
+# 
+# r6$print_ora_table(arranged_with = "fold_enrichment")
+# r6$ora_table
+# res_test <- r6$ora_result_list
+# 
+# r6$plot_ora_single(focus = "xl_vs_non_up", arrange = "fold_enrichment", show_category = 10)
+
+r6$go_gsea(
+  test = "xl_vs_non",
+  rank_type = "fc",
+  by_condition = FALSE,
   database = "WikiPathways",
-  focus = c("xl_vs_non_up", "xl_vs_non_down"),
-  ontology = r6$go_ora_term,
-  simplify_thr = r6$go_ora_simplify_thr,
-  alpha = r6$go_ora_alpha,
-  p_adj_method = r6$go_ora_p_adj_method,
-  background = r6$go_ora_background
+  ontology = "BP",
+  simplify_thr = 1,
+  alpha = 0.05,
+  p_adj_method = "BH",
+  min_gs_size = 10,
+  max_gs_size = 500
 )
 
+r6$print_gsea_table(arranged_with = "NES")
+r6$reactable_functional_analysis(r6$gsea_table)
+r6$plot_gsea_single(focus = "xl_vs_non", arrange = "NES", show_category = 10)
 
-r6$print_ora_table(arranged_with = "fold_enrichment")
-r6$ora_table
-r6$plot_ora_single(focus = "xl_vs_non_down", arrange = "fold_enrichment", show_category = 10)
-
-names(r6)
-get(class(r6))
-names(get(class())$public_fields)
-r6$public_fields()
-
-names(r6$public_fields)
-
-R6_extract_values <- function(r6class){
-  tmp <- sapply(r6class, class)
-  slots <- tmp[ !tmp %in% c("environment", "function")]
-  res <- list()
-  for (i in names(slots)) {
-    if ("R6" %in% class(r6class[[i]])) {
-      res[[i]]  <- R6_extract_values(r6class[[i]])
-    }else{
-      res[[i]] <- r6class[[i]]
-    }
-  }
-  return(res)
-}
-R6_extract_values(r6)
-
-extract_params_values <- function(r6class) {
-  tmp <- sapply(r6class, class)
-  slots <- tmp[!tmp %in% c("environment", "function")]
-  imap(slots, ~ {
-    if ("R6" %in% class(r6class[[.y]])) {
-      R6_extract_values(r6class[[.y]])
-    } else {
-      r6class[[.y]]
-    }
-  })
-}
-
-a <- extract_params_values(r6)
-
-tmp <- sapply(r6, class)
-tmp <- map(tmp, pluck, 1)
-tmp <- tmp[!tmp %in% c("environment", "function", "tbl_df", "data.table", "hclust", "matrix")]
-tmp$raw_data <- r6$raw_data
-imap(slots, ~ {
-  if ("R6" %in% class(r6class[[.y]])) {
-    R6_extract_values(r6class[[.y]])
-  } else {
-    r6class[[.y]]
-  }
-})
-aa <- r6$save_params_as_list(r6)
-
-aa$pdb_database <- "pippo"
-
-r6$loading_parameters(r6, parameters_list = aa)
-
-r6$pdb_database
-
-a <- c("Prepocessing", "PCA", "Correlation", "Rank", "Volcano", "Heatmap", "Network", "ORA", "GSEA")
-b <- c("PCA", "Correlation", "Rank", "Volcano", "Heatmap")
-
-check_terms <- function(input_vector) {
-  
-  
-  return(result_list)
-}
-
-check_terms(b)

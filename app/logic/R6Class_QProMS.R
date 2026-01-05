@@ -12,7 +12,8 @@ box::use(
   stats[sd, runif, rnorm, prcomp, cor, na.omit, t.test, p.adjust, wilcox.test, model.matrix, aov, hclust, dist, cutree, as.dendrogram, median, qt],
   rbioapi[rba_string_interactions_network],
   OmnipathR[get_complex_genes, import_omnipath_complexes],
-  clusterProfiler[enrichGO, simplify, gseGO, enrichKEGG, bitr, enrichWP],
+  clusterProfiler[enrichGO, simplify, gseGO, enrichKEGG, bitr, enrichWP, gseKEGG, gseWP],
+  enrichplot[gseaplot2],
   org.Hs.eg.db[org.Hs.eg.db],
   org.Mm.eg.db[org.Mm.eg.db],
   org.EcK12.eg.db[org.EcK12.eg.db],
@@ -702,7 +703,7 @@ QProMS <- R6Class(
         distinct(gene_names) %>% 
         pull(gene_names)
     },
-    reactable_interactive = function(table) {
+    reactable_interactive = function(table, sel = "multiple") {
       if(is.null(table)){return(NULL)}
       t <- table %>% 
         reactable(
@@ -712,7 +713,7 @@ QProMS <- R6Class(
           compact = TRUE,
           wrap = FALSE,
           height = "auto",
-          selection = "multiple",
+          selection = sel,
           paginationType = "simple",
           showPageSizeOptions = TRUE,
           pageSizeOptions = c(6, 12, 18, 24),
@@ -2461,6 +2462,14 @@ QProMS <- R6Class(
         self$ora_table <- NULL
         return(NULL)
       }
+      empty <- map(self$ora_result_list, ~ pluck(.x, "result")) %>%
+        list_rbind(names_to = "group") %>% 
+        as_tibble() %>% 
+        nrow()
+      if(empty == 0) {
+        self$ora_table <- NULL
+        return(NULL)
+      }
       self$ora_table <- map(self$ora_result_list, ~ pluck(.x, "result")) %>%
         list_rbind(names_to = "group") %>% 
         as_tibble() %>% 
@@ -2521,7 +2530,7 @@ QProMS <- R6Class(
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
-    
+      if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
         arrange = arrange_with,
@@ -2532,7 +2541,7 @@ QProMS <- R6Class(
         as_trelliscope_df(name = "BarPlot",
                           path = file.path(tr_dir, "test"),
                           jsonp = FALSE) %>% 
-        set_default_layout(ncol = 1)
+        set_default_layout(ncol = n_col)
       
       return(p)
     },
@@ -2557,12 +2566,13 @@ QProMS <- R6Class(
               sticky = "left",
               style = list(borderRight  = "1px solid #eee")
             ),
-            geneID = colDef(minWidth = 1500, align = "left")
+            geneID = colDef(minWidth = 1500, align = "left"),
+            Description = colDef(minWidth = 500, align = "left")
           )
         )
       return(t)
     },
-    go_gsea_rank_vector = function(test, rank, cond) {
+    go_gsea_rank_vector = function(test, rank, cond, db, org_db) {
       if(is.null(test)){return(NULL)}
       if (rank == "fc") {
         cond_1 <- str_split_1(test, "_vs_")[1]
@@ -2574,9 +2584,7 @@ QProMS <- R6Class(
           pivot_wider(names_from = condition, values_from = mean) %>%
           mutate(fold_change = get(cond_1) - get(cond_2)) %>%
           arrange(desc(fold_change)) %>%
-          select(gene_names, fold_change) %>%
-          deframe() %>%
-          list()
+          select(gene_names, score = fold_change) 
       } else {
         if (cond) {
           gsea_vec <- self$imputed_data %>%
@@ -2584,68 +2592,152 @@ QProMS <- R6Class(
             group_by(gene_names) %>%
             summarise(mean_intensity = mean(intensity), .groups = "drop") %>%
             arrange(desc(mean_intensity)) %>%
-            select(gene_names, mean_intensity) %>%
-            deframe() %>%
-            list()
+            select(gene_names, score = mean_intensity)
         } else {
           gsea_vec <- self$imputed_data %>%
             filter(label == test) %>%
             arrange(desc(intensity)) %>%
-            select(gene_names, intensity) %>%
-            deframe() %>%
-            list()
+            select(gene_names, score = intensity) 
         }
       }
-      gsea_list_vec <- set_names(gsea_vec, test)
+      if(db == "GO") {
+        gsea_vec_final <- gsea_vec %>%
+          deframe() %>%
+          list()
+      } else {
+        gsea_vec$idx <- seq_len(nrow(gsea_vec))
+        conv <- bitr(
+          gsea_vec$gene_names,
+          fromType = "SYMBOL",
+          toType   = "ENTREZID",
+          OrgDb    = org_db
+        )
+        conv <- conv[!duplicated(conv$SYMBOL), ]
+        gsea_vec$ENTREZID <- conv$ENTREZID[
+          match(gsea_vec$gene_names, conv$SYMBOL)
+        ]
+        gsea_vec <- gsea_vec[!is.na(gsea_vec$ENTREZID), ]
+        gsea_vec[order(gsea_vec$idx), ]
+        gsea_vec <- gsea_vec[, c("ENTREZID", "score", "idx")]
+        gsea_vec <- do.call(
+          rbind,
+          lapply(
+            split(gsea_vec, gsea_vec$ENTREZID),
+            function(x) x[which.max(abs(x$score)), ]
+          )
+        )
+        gsea_vec <- gsea_vec[order(gsea_vec$idx), c("ENTREZID", "score")]
+        rownames(gsea_vec) <- NULL
+        gsea_vec_final <- gsea_vec %>%
+          deframe() %>%
+          list()
+      }
+      gsea_list_vec <- set_names(gsea_vec_final, test)
       return(gsea_list_vec)
     },
-    go_gsea = function(test, rank_type, by_condition, ontology, simplify_thr, alpha, p_adj_method) {
+    go_gsea = function(test, rank_type, by_condition, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size) {
       if(is.null(test)){return(NULL)}
       
-      orgdb <- if (self$organism == "human") {
-        org.Hs.eg.db
-      } else if (self$organism == "mouse") {
-        org.Mm.eg.db
-      } else if (self$organism == "ecoli") {
-        org.EcK12.eg.db  # E. coli K12 database
-      } else if (self$organism == "drosophila") {
-        org.Dm.eg.db     # Drosophila database
-      } else if (self$organism == "buddingyast") {
-        org.Sc.sgd.db    # Saccharomyces cerevisiae (yeast) database
-      } else {
-        org.Hs.eg.db
-      }
+      org_map <- list(
+        human        = list(orgdb = org.Hs.eg.db,     kegg = "hsa",  wiki = "Homo sapiens"),
+        mouse        = list(orgdb = org.Mm.eg.db,     kegg = "mmu",  wiki = "Mus musculus"),
+        ecoli        = list(orgdb = org.EcK12.eg.db,  kegg = "ecoj", wiki = "Escherichia coli"),
+        drosophila   = list(orgdb = org.Dm.eg.db,     kegg = "dme",  wiki = "Drosophila melanogaster"),
+        buddingyast  = list(orgdb = org.Sc.sgd.db,    kegg = "sce",  wiki = "Saccharomyces cerevisiae")
+      )
       
+      org_info <- org_map[[self$organism]]
+      if (is.null(org_info)) return(NULL)
+      
+      orgdb     <- org_info$orgdb
+      kegg_org  <- org_info$kegg
+      wiki_org  <- org_info$wiki
       
       list_of_gesa_vector <- map(
         .x = test,
-        .f = ~ self$go_gsea_rank_vector(test = .x, rank = rank_type, cond = by_condition)
+        .f = ~ self$go_gsea_rank_vector(
+          test = .x,
+          rank = rank_type,
+          cond = by_condition,
+          db = database,
+          org_db = orgdb
+        )
       ) %>% flatten()
       
-      self$gsea_result_list <- map(
-        .x = list_of_gesa_vector,
-        .f = possibly(
-          ~ gseGO(
-            geneList     = .x,
-            OrgDb        = orgdb,
-            ont          = ontology,
-            keyType      = 'SYMBOL',
-            pAdjustMethod = p_adj_method,
-            verbose      = FALSE,
-            nPermSimple = 10000,
-            eps = 0
-          )  %>%
-            clusterProfiler::filter(p.adjust < alpha) %>%
-            simplify(cutoff = simplify_thr),
-          otherwise = NULL
+      if (database == "GO") {
+        self$gsea_result_list <- map(
+          .x = list_of_gesa_vector,
+          .f = possibly(
+            ~ gseGO(
+              geneList      = .x,
+              OrgDb         = orgdb,
+              ont           = ontology,
+              keyType       = 'SYMBOL',
+              pAdjustMethod = p_adj_method,
+              minGSSize     = min_gs_size,
+              maxGSSize     = max_gs_size,
+              verbose       = FALSE,
+              nPermSimple   = 10000,
+              eps           = 0
+            )  %>%
+              clusterProfiler::filter(p.adjust < alpha) %>%
+              simplify(cutoff = simplify_thr),
+            otherwise = NULL
+          )
         )
-      )
+      }
+      if (database == "KEGG") {
+        self$gsea_result_list <- map(
+          .x = list_of_gesa_vector,
+          .f = possibly(
+            ~ gseKEGG(
+              geneList  = .x,
+              organism = kegg_org,
+              keyType = 'kegg',
+              pAdjustMethod = p_adj_method,
+              minGSSize = min_gs_size,
+              maxGSSize = max_gs_size,
+              verbose       = FALSE,
+              nPermSimple   = 10000,
+              eps           = 0
+            ) %>%
+              clusterProfiler::filter(p.adjust < alpha),
+            otherwise = NULL
+          )
+        )
+      }
+      if (database == "WikiPathways") {
+        self$gsea_result_list <- map(
+          .x = list_of_gesa_vector, 
+          .f = possibly(
+            ~ gseWP(
+            geneList = .x,
+            organism = wiki_org,
+            pAdjustMethod = p_adj_method,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size,
+            verbose       = FALSE,
+            nPermSimple   = 10000,
+            eps           = 0) %>% 
+            clusterProfiler::filter(p.adjust < alpha), 
+          otherwise = NULL
+          )
+        )
+      }
     },
     print_gsea_table = function(arranged_with) {
       if(length(compact(self$gsea_result_list)) == 0){
         self$gsea_table <- NULL
         return(NULL)
       }
+      empty <- map(self$gsea_result_list, ~ pluck(.x, "result")) %>%
+        list_rbind(names_to = "group") %>% 
+        as_tibble() %>% 
+        nrow()
+      if(empty == 0) {
+        self$gsea_table <- NULL
+        return(NULL)
+        }
       self$gsea_table <- map(self$gsea_result_list, ~ pluck(.x, "result")) %>%
         list_rbind(names_to = "group") %>% 
         as_tibble() %>% 
@@ -2704,7 +2796,7 @@ QProMS <- R6Class(
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
-      
+      if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
         arrange = arrange_with,
@@ -2715,9 +2807,26 @@ QProMS <- R6Class(
         as_trelliscope_df(name = "BarPlot",
                           path = file.path(tr_dir, "test"),
                           jsonp = FALSE) %>% 
-        set_default_layout(ncol = 1)
+        set_default_layout(ncol = n_col)
       
       return(p)
+    },
+    plot_gseaplot = function(focus, gene_set_ID) {
+      if(is.null(self$gsea_table) || is.null(focus) || length(gene_set_ID) == 0){return(NULL)}
+      data <- self$gsea_table %>%  
+        filter(group == focus) 
+      if (nrow(data) == 0) {
+        return(NULL)
+      }
+      plot_title <- data %>% 
+        filter(ID == gene_set_ID) %>% 
+        pull(Description) %>% 
+        unique()
+      gseaplot2(
+        self$gsea_result_list[[focus]],
+        geneSetID = gene_set_ID, 
+        title = plot_title
+      )
     },
     download_excel = function(table, name, handler) {
       header_style <- createStyle(
