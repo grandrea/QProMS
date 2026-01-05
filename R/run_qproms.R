@@ -11,7 +11,7 @@
 #' @importFrom utils installed.packages
 run_qproms <- function(launch.browser = TRUE, port = NULL, host = "127.0.0.1") {
   
-  cat("🚀 QProMS - Quantitative Proteomics Made Simple\n\n")
+  cat(" QProMS - Quantitative Proteomics Made Simple\n\n")
   
   # AUTO-INSTALL Bioconductor deps
   bioc_deps <- c(
@@ -30,13 +30,13 @@ run_qproms <- function(launch.browser = TRUE, port = NULL, host = "127.0.0.1") {
   # Check + install Bioc deps
   missing_bioc <- bioc_deps[!bioc_deps %in% rownames(installed.packages())]
   if(length(missing_bioc) > 0) {
-    cat("🚀 Installing", length(missing_bioc), "Bioconductor dependencies...\n")
+    cat(" Installing", length(missing_bioc), "Bioconductor dependencies...\n")
     if(!"BiocManager" %in% rownames(installed.packages())) {
       cat("  → Installing BiocManager...\n")
       install.packages("BiocManager", ask = FALSE)
     }
     BiocManager::install(missing_bioc, ask = FALSE, update = FALSE)
-    cat("✅ Bioconductor dependencies OK\n\n")
+    cat("Bioconductor dependencies OK\n\n")
   }
   
   # Check + install CRAN deps
@@ -44,16 +44,16 @@ run_qproms <- function(launch.browser = TRUE, port = NULL, host = "127.0.0.1") {
   if(length(missing_cran) > 0) {
     cat("🚀 Installing", length(missing_cran), "CRAN dependencies...\n")
     install.packages(missing_cran, ask = FALSE)
-    cat("✅ CRAN dependencies OK\n\n")
+    cat("CRAN dependencies OK\n\n")
   }
   
   # Launch app
   app_dir <- system.file("shiny/qproms", package = "qproms")
   if(app_dir == "") {
-    stop("❌ QProMS app not found. Reinstall with:\n   remotes::install_github('ieoresearch/QProMS@branch')", call. = FALSE)
+    stop("QroMS app not found. Reinstall with:\n   remotes::install_github('ieoresearch/QProMS@branch')", call. = FALSE)
   }
   
-  cat("🚀 Launching QProMS on", host, ifelse(is.null(port), "random port", port), "\n")
+  cat("Launching QProMS on", host, ifelse(is.null(port), "random port", port), "\n")
   shiny::runApp(app_dir, launch.browser = launch.browser, port = port, host = host)
 }
 
