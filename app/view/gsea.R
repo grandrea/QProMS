@@ -278,9 +278,11 @@ server <- function(id, r6, main_session) {
     output$gseaplot <- renderPlot({
       watch("plot")
       if(!is.null(r6$gsea_table)) {
+        group <- r6$gsea_table[gene_selected(),] %>%
+          pull(group)
         highlights <- r6$gsea_table[gene_selected(),] %>%
           pull(ID)
-        r6$plot_gseaplot(focus = r6$go_gsea_focus, gene_set_ID = highlights)
+        r6$plot_gseaplot(focus = group, gene_set_ID = highlights)
       }
     })
   })
