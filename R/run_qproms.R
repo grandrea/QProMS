@@ -46,7 +46,15 @@ run_qproms <- function(launch.browser = TRUE, port = NULL, host = "127.0.0.1") {
     install.packages(missing_cran, ask = FALSE)
     cat("✅ CRAN dependencies OK\n\n")
   }
-  
+  # Fix trelliscope: force GitHub se CRAN fallisce  ← NUOVO
+  if(!"trelliscope" %in% rownames(installed.packages())) {
+    cat("🚀 trelliscope failed CRAN → Installing from GitHub...\n")
+    if(!"remotes" %in% rownames(installed.packages())) {
+      install.packages("remotes", ask=FALSE)
+    }
+    remotes::install_github("trelliscope/trelliscope")
+    cat("✅ trelliscope GitHub installed\n\n")
+  }
   # Launch app
   app_dir <- system.file("shiny/qproms", package = "qproms")
   if(app_dir == "") {
