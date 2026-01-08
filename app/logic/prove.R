@@ -50,16 +50,16 @@ r6$stat_uni_test(test = "xl_vs_non", fc = 1, alpha = 0.05, p_adj_method = "BH", 
 # r6$make_edges("string")
 # r6$plot_heatmap(order_by_expdesing = FALSE)
 
-# r6$go_ora(
-#   list_from = "univariate",
-#   database = "KEGG",
-#   focus = "xl_vs_non_up",
-#   ontology = r6$go_ora_term,
-#   simplify_thr = r6$go_ora_simplify_thr,
-#   alpha = r6$go_ora_alpha,
-#   p_adj_method = r6$go_ora_p_adj_method,min_gs_size = 10,max_gs_size = 500,
-#   background = r6$go_ora_background
-# )
+r6$go_ora(
+  list_from = "univariate",
+  database = "KEGG",
+  focus = c("xl_vs_non_up", "xl_vs_non_down"),
+  ontology = r6$go_ora_term,
+  simplify_thr = r6$go_ora_simplify_thr,
+  alpha = r6$go_ora_alpha,
+  p_adj_method = r6$go_ora_p_adj_method,min_gs_size = 10,max_gs_size = 500,
+  background = r6$go_ora_background
+)
 # 
 # 
 # r6$print_ora_table(arranged_with = "fold_enrichment")
@@ -72,7 +72,7 @@ r6$go_gsea(
   test = "xl_vs_non",
   rank_type = "fc",
   by_condition = FALSE,
-  database = "WikiPathways",
+  database = "KEGG",
   ontology = "BP",
   simplify_thr = 1,
   alpha = 0.05,
