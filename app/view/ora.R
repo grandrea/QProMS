@@ -115,26 +115,44 @@ ui <- function(id) {
             )
           ),
           selectInput(
-            inputId = ns("ontology_input"),
-            label = "Ontology",
+            inputId = ns("database_input"),
+            label = "Database",
             choices = c(
-              "Biological Processes" = "BP",
-              "Molecular Function" = "MF",
-              "Cellular Components" = "CC"
+              "Gene Ontology" = "GO",
+              "KEGG",
+              "WikiPathways"
             ),
-            selected = "BP"
+            selected = "GO"
+          ),
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            selectInput(
+              inputId = ns("ontology_input"),
+              label = "Ontology",
+              choices = c(
+                "Biological Processes" = "BP",
+                "Molecular Function" = "MF",
+                "Cellular Components" = "CC"
+              ),
+              selected = "BP"
+            )
           )
         ),
         accordion_panel(
           title = "Parameters",
           id = ns("params"),
-          sliderInput(
-            inputId = ns("simplify_thr"),
-            label = "Simplify threshold",
-            min = 0.1,
-            max = 1,
-            value = 1,
-            step = 0.1
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            sliderInput(
+              inputId = ns("simplify_thr"),
+              label = "Simplify threshold",
+              min = 0.1,
+              max = 1,
+              value = 1,
+              step = 0.1
+            )
           ),
           input_switch(
             id = ns("background_input"),
@@ -148,6 +166,22 @@ ui <- function(id) {
             min = 0.01,
             max = 0.05,
             step = 0.01
+          ),
+          numericInput(
+            inputId = ns("minGSsize"),
+            label = "min GS size",
+            value = 10,
+            min = 1,
+            max = 100,
+            step = 1
+          ),
+          numericInput(
+            inputId = ns("maxGSsize"),
+            label = "max GS size",
+            value = 500,
+            min = 1,
+            max = 1000,
+            step = 1
           ),
           selectInput(
             inputId = ns("truncation_input"),
@@ -280,11 +314,14 @@ server <- function(id, r6, main_session) {
       
       r6$go_ora(
         list_from = r6$go_ora_from_statistic,
+        database = isolate(input$database_input),
         focus = r6$go_ora_focus,
         ontology = r6$go_ora_term,
         simplify_thr = r6$go_ora_simplify_thr,
         alpha = r6$go_ora_alpha,
         p_adj_method = r6$go_ora_p_adj_method,
+        min_gs_size = isolate(input$minGSsize),
+        max_gs_size = isolate(input$maxGSsize),
         background = r6$go_ora_background
       )
       r6$print_ora_table(r6$go_ora_plot_arrenge)

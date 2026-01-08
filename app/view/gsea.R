@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, br, sliderInput, actionButton, isolate, icon, observe, updateNumericInput, updateSliderInput, updateSelectInput, updateSelectizeInput, reactive, observeEvent, numericInput, conditionalPanel, selectizeInput],
+  shiny[moduleServer, NS, selectInput, br, sliderInput, actionButton, isolate, icon, observe, updateNumericInput, updateSliderInput, updateSelectInput, updateSelectizeInput, reactive, observeEvent, numericInput, conditionalPanel, selectizeInput, renderPlot, plotOutput],
   bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, tooltip, input_task_button],
   gargoyle[watch, trigger],
   trelliscope[trelliscopeOutput, renderTrelliscope],
@@ -22,6 +22,10 @@ ui <- function(id) {
         nav_panel(
           "Table",
           reactableOutput(ns("table"))
+        ),
+        nav_panel(
+          "GSEA plot",
+          plotOutput(ns("gseaplot"))
         )
       )
     ),
@@ -77,26 +81,44 @@ ui <- function(id) {
             )
           ),
           selectInput(
-            inputId = ns("ontology_input"),
-            label = "Ontology",
+            inputId = ns("database_input"),
+            label = "Database",
             choices = c(
-              "Biological Processes" = "BP",
-              "Molecular Function" = "MF",
-              "Cellular Components" = "CC"
+              "Gene Ontology" = "GO",
+              "KEGG",
+              "WikiPathways"
             ),
-            selected = "BP"
+            selected = "GO"
+          ),
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            selectInput(
+              inputId = ns("ontology_input"),
+              label = "Ontology",
+              choices = c(
+                "Biological Processes" = "BP",
+                "Molecular Function" = "MF",
+                "Cellular Components" = "CC"
+              ),
+              selected = "BP"
+            )
           )
         ),
         accordion_panel(
           title = "Parameters",
           id = ns("params"),
-          sliderInput(
-            inputId = ns("simplify_thr"),
-            label = "Simplify threshold",
-            min = 0.1,
-            max = 1,
-            value = 1,
-            step = 0.1
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            sliderInput(
+              inputId = ns("simplify_thr"),
+              label = "Simplify threshold",
+              min = 0.1,
+              max = 1,
+              value = 1,
+              step = 0.1
+            )
           ),
           numericInput(
             inputId = ns("alpha_input"),
@@ -105,6 +127,22 @@ ui <- function(id) {
             min = 0.01,
             max = 0.05,
             step = 0.01
+          ),
+          numericInput(
+            inputId = ns("minGSsize"),
+            label = "min GS size",
+            value = 10,
+            min = 1,
+            max = 100,
+            step = 1
+          ),
+          numericInput(
+            inputId = ns("maxGSsize"),
+            label = "max GS size",
+            value = 500,
+            min = 1,
+            max = 1000,
+            step = 1
           ),
           selectInput(
             inputId = ns("truncation_input"),
@@ -212,9 +250,12 @@ server <- function(id, r6, main_session) {
         test = r6$go_gsea_focus,
         rank_type = r6$go_gsea_rank_with,
         by_condition = r6$go_gsea_by_cond,
+        database = isolate(input$database_input),
         ontology = r6$go_gsea_term,
         simplify_thr = r6$go_gsea_simplify_thr,
         alpha = r6$go_gsea_alpha,
+        min_gs_size = isolate(input$minGSsize),
+        max_gs_size = isolate(input$maxGSsize),
         p_adj_method = r6$go_gsea_p_adj_method
       )
       r6$print_gsea_table(r6$go_gsea_plot_arrenge)
@@ -230,8 +271,19 @@ server <- function(id, r6, main_session) {
 
     output$table <- renderReactable({
       watch("plot")
-      r6$reactable_functional_analysis(r6$gsea_table)
+      r6$reactable_interactive(table = r6$gsea_table, sel = "single")
     })
     
+    gene_selected <- reactive(getReactableState("table", "selected"))
+    output$gseaplot <- renderPlot({
+      watch("plot")
+      if(!is.null(r6$gsea_table)) {
+        group <- r6$gsea_table[gene_selected(),] %>%
+          pull(group)
+        highlights <- r6$gsea_table[gene_selected(),] %>%
+          pull(ID)
+        r6$plot_gseaplot(focus = group, gene_set_ID = highlights)
+      }
+    })
   })
 }
