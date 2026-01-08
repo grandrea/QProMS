@@ -420,6 +420,24 @@ QProMS <- R6Class(
           drop_na(all_of(gene_col)) %>% 
           mutate(!!gene_col := str_extract(.data[[gene_col]], "[^;]*")) %>% 
           mutate(!!gene_col := make.unique(.data[[gene_col]], sep = "_"))
+      } else if (self$input_type == "PD") {
+        org_map <- inputs_type_lists$org_map
+        org_info <- org_map[[self$organism]]
+        if (is.null(org_info)) return(NULL)
+        orgdb     <- org_info$orgdb
+        g_names <- bitr(
+          initial_table$Accession,
+          fromType = "UNIPROT",
+          toType = "SYMBOL",
+          OrgDb = orgdb
+        ) %>%
+          dplyr::rename(Accession = UNIPROT)
+        gene_col <- "SYMBOL"
+        protein_col <- "Accession"
+        required_columns <- c(gene_col, inputs_type_lists$metadata_list[[self$input_type]])
+        initial_table <- left_join(initial_table, g_names, by = "Accession") %>%
+          dplyr::filter(!stringr::str_detect(Accession, "ENSEMBL")) %>%
+          mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
       } else {
         required_columns <- inputs_type_lists$metadata_list[[self$input_type]]
         gene_col <- required_columns[1]
@@ -2090,20 +2108,10 @@ QProMS <- R6Class(
       edges_string_table <- NULL
       edges_corum_table <- NULL
       if(is.null(self$nodes_table)){return(NULL)}
-      if(self$organism == "human") {
-        tax_id <- 9606
-      } else if(self$organism == "mouse") {
-        tax_id <- 10090
-      } else if(self$organism == "ecoli") {
-        tax_id <- 562
-      } else if(self$organism == "drosophila") {
-        tax_id <- 7227
-      } else if(self$organism == "buddingyeast") {
-        tax_id <- 559292
-      } else {
-        tax_id <- 9606
-      }
-      
+      org_map <- inputs_type_lists$org_map
+      org_info <- org_map[[self$organism]]
+      if (is.null(org_info)) return(NULL)
+      tax_id <- org_info$tax_id
       if("string" %in% source) {
         edges_string_table <- self$name_for_edges %>%
           rba_string_interactions_network(species = tax_id, verbose = FALSE) %>%
@@ -2343,15 +2351,7 @@ QProMS <- R6Class(
     },
     go_ora = function(list_from, focus, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size, background) {
       if(is.null(focus)){return(NULL)}
-      
-      org_map <- list(
-        human        = list(orgdb = org.Hs.eg.db,     kegg = "hsa",  wiki = "Homo sapiens"),
-        mouse        = list(orgdb = org.Mm.eg.db,     kegg = "mmu",  wiki = "Mus musculus"),
-        ecoli        = list(orgdb = org.EcK12.eg.db,  kegg = "ecoj", wiki = "Escherichia coli"),
-        drosophila   = list(orgdb = org.Dm.eg.db,     kegg = "dme",  wiki = "Drosophila melanogaster"),
-        buddingyast  = list(orgdb = org.Sc.sgd.db,    kegg = "sce",  wiki = "Saccharomyces cerevisiae")
-      )
-      
+      org_map <- inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
       if (is.null(org_info)) return(NULL)
       
@@ -2637,15 +2637,7 @@ QProMS <- R6Class(
     },
     go_gsea = function(test, rank_type, by_condition, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size) {
       if(is.null(test)){return(NULL)}
-      
-      org_map <- list(
-        human        = list(orgdb = org.Hs.eg.db,     kegg = "hsa",  wiki = "Homo sapiens"),
-        mouse        = list(orgdb = org.Mm.eg.db,     kegg = "mmu",  wiki = "Mus musculus"),
-        ecoli        = list(orgdb = org.EcK12.eg.db,  kegg = "ecoj", wiki = "Escherichia coli"),
-        drosophila   = list(orgdb = org.Dm.eg.db,     kegg = "dme",  wiki = "Drosophila melanogaster"),
-        buddingyast  = list(orgdb = org.Sc.sgd.db,    kegg = "sce",  wiki = "Saccharomyces cerevisiae")
-      )
-      
+      org_map <- inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
       if (is.null(org_info)) return(NULL)
       
