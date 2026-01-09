@@ -275,6 +275,7 @@ server <- function(id, r6, main_session) {
       r6$shiny_wrap_workflow()
       trigger("plot", "genes")
       nav_select("top_navigation", "Preprocessing", session = main_session)
+      purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
       if (r6$with_statistics) {
         purrr::walk(
           panels,
@@ -291,9 +292,7 @@ server <- function(id, r6, main_session) {
             )
           )
         )
-      } else {
-        purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
-      }
+      } 
     })
     
     statistics$server("statistics", r6 = r6, main_session = main_session)

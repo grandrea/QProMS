@@ -16,20 +16,38 @@ box::use(app/static/contaminants)
 
 r6 <- R6Class_QProMS$QProMS$new()
 # r6$loading_data(input_path = "app/static/proteinGroups.txt", input_name = "test")
-r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/combined_protein.tsv", input_name = "test")
+r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/Proteome_Discoverer.txt", input_name = "test")
 # a <- r6$loading_parameters(input_path = "/Users/bedin.fabio/Desktop/QProMS_parameters_2024-09-04.yaml", r6)
 msg <- r6$identify_table_type()
 r6$create_summary_table()
-r6$make_expdesign("MaxLFQ Intensity")
+r6$make_expdesign(intensity_type = "Abundance:")
+# a <- tibble(
+#   "condition" = c("xl", "xl", "xl", "non", "non", "non"),
+#   "key" = c(
+#     "XL_1 MaxLFQ Intensity",
+#     "XL_2 MaxLFQ Intensity",
+#     "XL_3 MaxLFQ Intensity",
+#     "nonXL_1 MaxLFQ Intensity",
+#     "nonXL_2 MaxLFQ Intensity",
+#     "nonXL_3 MaxLFQ Intensity"
+#   )
+# )
 a <- tibble(
-  "condition" = c("xl", "xl", "xl", "non", "non", "non"),
+  "condition" = c(
+    "control",
+    "control",
+    "control",
+    "treated",
+    "treated",
+    "treated"
+  ),
   "key" = c(
-    "XL_1 MaxLFQ Intensity",
-    "XL_2 MaxLFQ Intensity",
-    "XL_3 MaxLFQ Intensity",
-    "nonXL_1 MaxLFQ Intensity",
-    "nonXL_2 MaxLFQ Intensity",
-    "nonXL_3 MaxLFQ Intensity"
+    "Abundance: F1: Control, Control, 1",
+    "Abundance: F2: Control, Control, 2",
+    "Abundance: F3: Control, Control, 3",
+    "Abundance: F4: Sample, Treated, 4",
+    "Abundance: F5: Sample, Treated, 5",
+    "Abundance: F6: Sample, Treated, 6"
   )
 )
 r6$validate_expdesign(a)
@@ -85,3 +103,13 @@ r6$print_gsea_table(arranged_with = "NES")
 r6$reactable_functional_analysis(r6$gsea_table)
 r6$plot_gsea_single(focus = "xl_vs_non", arrange = "NES", show_category = 10)
 
+test %>% 
+  dplyr::filter(stringr::str_detect(Accession, "ENSEMBL")) %>% View()
+
+g_names <- bitr(test$Accession, fromType = "UNIPROT", toType = "SYMBOL", OrgDb = org.Hs.eg.db) %>% 
+  dplyr::rename(Accession = UNIPROT,  gene_names = SYMBOL)
+test <- left_join(test, g_names, by = "Accession")
+length(unique(conv$SYMBOL))
+length(conv$SYMBOL)
+
+r6$check_intensity_regex()

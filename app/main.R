@@ -49,11 +49,6 @@ ui <- function(id) {
     nav_panel(title = "PCA", pca$ui(ns("pca"))),
     nav_panel(title = "Correlation", correlation$ui(ns("correlation"))),
     nav_panel(title = "Rank", rank$ui(ns("rank"))),
-    # nav_panel(title = "Volcano", statistics$ui(ns("statistics"))),
-    # nav_panel(title = "Heatmap", heatmap$ui(ns("heatmap"))),
-    # nav_panel(title = "Network", network$ui(ns("network"))),
-    # nav_panel(title = "ORA", ora$ui(ns("ora"))),
-    # nav_panel(title = "GSEA", gsea$ui(ns("gsea"))),
     nav_spacer(),
     nav_panel(title = "", value = "Save Results", icon = icon("download"), download$ui(ns("download"))),
     nav_panel(title = "", value = "Settings", icon = icon("gear"), settings$ui(ns("settings"))),
@@ -75,11 +70,6 @@ server <- function(id) {
     pca$server("pca", r6 = object)
     correlation$server("correlation", r6 = object)
     rank$server("rank", r6 = object)
-    # statistics$server("statistics", r6 = object)
-    # heatmap$server("heatmap", r6 = object)
-    # network$server("network", r6 = object)
-    # ora$server("ora", r6 = object)
-    # gsea$server("gsea", r6 = object)
     download$server("download", r6 = object)
     settings$server("settings", r6 = object, main_session = session)
     help$server("help", r6 = object, main_session = session)

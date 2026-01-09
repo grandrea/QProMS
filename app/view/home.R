@@ -1,8 +1,49 @@
 box::use(
   shiny[moduleServer, tags, NS, div, p, h1, h4, HTML, fileInput, textInput, req, tagList, passwordInput, updateSelectInput, selectInput, actionButton, observeEvent, isolate, br, observe, updateActionButton, uiOutput, renderUI, icon],
-  bslib[page_fillable, layout_columns, navset_underline, nav_spacer, nav_panel, card, accordion, accordion_panel, accordion_panel_close, accordion_panel_open, nav_select, tooltip, input_task_button],
+  bslib[page_fillable, layout_columns, navset_underline, nav_spacer, nav_remove, nav_panel, nav_insert, card, accordion, accordion_panel, accordion_panel_close, accordion_panel_open, nav_select, tooltip, input_task_button],
   gargoyle[init, watch, trigger],
   shinyalert[shinyalert],
+)
+
+box::use(
+  app/view/statistics,
+  app/view/heatmap,
+  app/view/network,
+  app/view/ora,
+  app/view/gsea,
+)
+
+panels <- list(
+  Volcano = list(
+    target = "Rank",
+    title  = "Volcano",
+    ui     = statistics$ui,
+    ns     = "statistics"
+  ),
+  Heatmap = list(
+    target = "Volcano",
+    title  = "Heatmap",
+    ui     = heatmap$ui,
+    ns     = "heatmap"
+  ),
+  Network = list(
+    target = "Heatmap",
+    title  = "Network",
+    ui     = network$ui,
+    ns     = "network"
+  ),
+  ORA = list(
+    target = "Network",
+    title  = "ORA",
+    ui     = ora$ui,
+    ns     = "ora"
+  ),
+  GSEA = list(
+    target = "ORA",
+    title  = "GSEA",
+    ui     = gsea$ui,
+    ns     = "gsea"
+  )
 )
 
 #' @export
@@ -107,6 +148,7 @@ server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     init("expdesig", "session")
+    ns <- session$ns
     
     observeEvent(input$setting, {
       nav_select("top_navigation", "Settings", session = main_session)
@@ -151,13 +193,52 @@ server <- function(id, r6, main_session) {
           r6$loading_parameters(input_path = input$upload_params$datapath, r6)
           trigger("session", "plot", "genes")
           nav_select("top_navigation", "Preprocessing", session = main_session)
+          purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
+          if (r6$with_statistics) {
+            purrr::walk(
+              panels,
+              ~ nav_insert(
+                "top_navigation",
+                target  = .x$target,
+                select  = FALSE,
+                session = main_session,
+                nav_panel(
+                  title = .x$title,
+                  class = "html-fill-item html-fill-container bslib-gap-spacing",
+                  style = "--bslib-navbar-margin:0; padding:0",
+                  .x$ui(ns(.x$ns))
+                )
+              )
+            )
+          } 
         }
       }
       if(input$start_nav == "Example Dataset") {
         r6$loading_parameters(input_path = "app/static/QProMS_example_dataset_p62.rds", r6)
         trigger("session", "plot", "genes")
         nav_select("top_navigation", "Preprocessing", session = main_session)
+        purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
+        purrr::walk(
+          panels,
+          ~ nav_insert(
+            "top_navigation",
+            target  = .x$target,
+            select  = FALSE,
+            session = main_session,
+            nav_panel(
+              title = .x$title,
+              class = "html-fill-item html-fill-container bslib-gap-spacing",
+              style = "--bslib-navbar-margin:0; padding:0",
+              .x$ui(ns(.x$ns))
+            )
+          )
+        )
       }
     })
+    statistics$server("statistics", r6 = r6, main_session = main_session)
+    heatmap$server("heatmap", r6 = r6, main_session = main_session)
+    network$server("network", r6 = r6, main_session = main_session)
+    ora$server("ora", r6 = r6, main_session = main_session)
+    gsea$server("gsea", r6 = r6, main_session = main_session)
   })
 }

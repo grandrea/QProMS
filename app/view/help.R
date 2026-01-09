@@ -38,7 +38,7 @@ ui <- function(id) {
           radioButtons(
             inputId = ns("software"),
             label = "",
-            choices = c("MaxQuant", "FragPipe", "DIA-NN", "Spectronaut"),
+            choices = c("MaxQuant", "Proteome Discoverer (PD)"= "PD", "FragPipe", "DIA-NN", "Spectronaut"),
             inline = TRUE
           )
         )
@@ -129,6 +129,11 @@ server <- function(id, r6, main_session) {
           tags$li("Header row required"),
           tags$li("No manual modification required")
         ),
+        "PD" = tags$ul(
+          tags$li("Format: .txt"),
+          tags$li("Header row required"),
+          tags$li("No manual modification required")
+        ),
         "FragPipe" = tags$ul(
           tags$li("Format: .tsv"),
           tags$li("File: combined_protein.tsv"),
@@ -178,7 +183,12 @@ server <- function(id, r6, main_session) {
         input$software,
         "MaxQuant" = tags$ul(
           tags$li("Support for LFQ, iBAQ, and raw intensity values"),
+          tags$li("Peptides, Unique Peptides and Razor + Unique Peptides columns are used for QC filtering"),
           tags$li("Reverse Potential contaminant and Only identified by site columns are used for QC filtering")
+        ),
+        "PD" = tags$ul(
+          tags$li("Support for Abundance, and Abundances (Normalized) intensity values"),
+          tags$li("Peptides, Unique Peptides and Razor Peptides columns are used for QC filtering")
         ),
         "FragPipe" = tags$ul(
           tags$li("Support for MaxLFQ Intensity and Intensity values"),

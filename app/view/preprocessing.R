@@ -225,7 +225,7 @@ server <- function(id, r6) {
     observe({
       watch("genes")
       if(!is.null(r6$input_type)) {
-        if(r6$input_type != "MaxQuant") {
+        if(!r6$input_type %in% c("MaxQuant", "PD")) {
           accordion_panel_remove("accordion", "Subset by Peptides", session = session)
           accordion_panel_remove("accordion", "Remove Contaminants", session = session)
         }
