@@ -14,11 +14,6 @@ box::use(
   OmnipathR[get_complex_genes, import_omnipath_complexes],
   clusterProfiler[enrichGO, simplify, gseGO, enrichKEGG, bitr, enrichWP, gseKEGG, gseWP],
   enrichplot[gseaplot2],
-  org.Hs.eg.db[org.Hs.eg.db],
-  org.Mm.eg.db[org.Mm.eg.db],
-  org.EcK12.eg.db[org.EcK12.eg.db],
-  org.Dm.eg.db[org.Dm.eg.db],
-  org.Sc.sgd.db[org.Sc.sgd.db],
   viridis[viridis],
   htmlwidgets[JS],
   reactable[reactable, colDef],
@@ -497,14 +492,28 @@ QProMS <- R6Class(
       
       data <- self$filtered_data
       
-      filtered_data <- data %>%
-        {if (pep_filter == "peptides") 
-          filter(., `Peptides` >= pep_thr)
-          else if (pep_filter == "unique") 
-            filter(., `Unique peptides` >= pep_thr)
-          else 
-            filter(., `Razor + unique peptides` >= pep_thr)
-        }
+      if(self$input_type == "MaxQuant") {
+        filtered_data <- data %>%
+          {if (pep_filter == "peptides") 
+            filter(., `Peptides` >= pep_thr)
+            else if (pep_filter == "unique") 
+              filter(., `Unique peptides` >= pep_thr)
+            else 
+              filter(., `Razor + unique peptides` >= pep_thr)
+          }
+      }
+      
+      if(self$input_type == "PD") {
+        filtered_data <- data %>%
+          {if (pep_filter == "peptides") 
+            filter(., `# Peptides` >= pep_thr)
+            else if (pep_filter == "unique") 
+              filter(., `# Unique Peptides` >= pep_thr)
+            else 
+              filter(., `# Razor Peptides` >= pep_thr)
+          }
+      }
+      
       
       self$filtered_data <- filtered_data
     },
@@ -692,7 +701,7 @@ QProMS <- R6Class(
         valid_val_filter = self$valid_val_filter,
         valid_val_thr = self$valid_val_thr
       )
-      if(self$input_type == "MaxQuant") {
+      if(self$input_type %in% c("MaxQuant", "PD")) {
         self$subset_peptides(
           pep_filter = self$pep_filter,
           pep_thr = self$pep_thr
