@@ -123,12 +123,17 @@ server <- function(id, r6) {
     
     output$scatter_plot <- renderTrelliscope({
       watch("plot")
+      highlights <- NULL
       if(r6$imp_methods == "none"){
         data <- r6$print_table(r6$normalized_data, df = TRUE)
-        highlights <- data[gene_selected(), ] %>% pull(gene_names)
+        if(!is.null(gene_selected())){
+          highlights <- data[gene_selected(), ] %>% pull(gene_names)
+        }
       }else{
         data <- r6$print_table(r6$imputed_data, df = TRUE)
-        highlights <- data[gene_selected(), ] %>% pull(gene_names)
+        if(!is.null(gene_selected())){
+          highlights <- data[gene_selected(), ] %>% pull(gene_names)
+        }
       }
       x <- isolate(input$x_filter)
       y <- isolate(input$y_filter)

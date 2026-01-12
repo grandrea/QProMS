@@ -23,7 +23,7 @@ box::use(
   plotly[plotly_empty, config, layout],
   rlist[list.save, list.load],
   openxlsx[createStyle, createWorkbook, addWorksheet, writeDataTable, setColWidths, addStyle, saveWorkbook],
-  echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords]
+  echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords, e_lm]
 )
 
 box::use(
@@ -1201,7 +1201,6 @@ QProMS <- R6Class(
       return(p)
     },
     plot_correlation = function() {
-      
       if(is.null(self$normalized_data)){return(NULL)}
       if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the correlation matrix."))}
       
@@ -1311,10 +1310,19 @@ QProMS <- R6Class(
         e_grid(containLabel = TRUE) %>%
         e_title(
           paste0("correlation: ", value),
-          left = "center",
+          left = "left",
           textStyle = list(fontSize = self$plot_font_size)
         ) %>%  
         e_toolbox_feature(feature = "saveAsImage")
+      
+      p <- p %>%
+        e_lm(
+          formula = y ~ x,
+          name = "Regression",
+          smooth = FALSE,
+          lineStyle = list(width = 2, type = "solid"),
+          itemStyle = list(color = "#d62728")
+        )
       
       if (highlights_names != "") {
         for (name in str_split_1(highlights_names, ":")) {

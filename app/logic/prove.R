@@ -113,3 +113,15 @@ length(unique(conv$SYMBOL))
 length(conv$SYMBOL)
 
 r6$check_intensity_regex()
+
+r6$plot_correlation()
+heatmaply::heatmaply(
+  r6$plot_correlation(),
+  # Rowv = as.dendrogram(self$row_den),
+  column_text_angle = 45,
+  plot_method = "plotly",
+  showticklabels = c(TRUE, FALSE),
+  # label_names = c("Gene", "Sample", mat_name),
+  row_dend_left = TRUE,
+  seriate = "none"
+) 
