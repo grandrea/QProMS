@@ -1,6 +1,6 @@
 box::use(
   shiny[moduleServer, NS, selectInput, br, actionButton, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI],
-  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button, nav_insert],
+  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button, nav_insert, layout_column_wrap],
   reactable[reactableOutput, renderReactable, reactable, colDef],
   rhandsontable[rHandsontableOutput, renderRHandsontable, hot_to_r],
   purrr[map, set_names, imap, keep_at, flatten_chr, discard_at, walk],
@@ -243,14 +243,19 @@ server <- function(id, r6, main_session) {
         }
         output$define_action_button <- renderUI({
           if(result$validation_status){
-            input_task_button(
-              id = ns("start"),
-              label = "START"
+            bslib::layout_column_wrap(
+              width = 1,
+              input_task_button(
+                id = ns("start"),
+                label = "START",
+                width = "100%"
+              )
             )
           } else {
             actionButton(
               inputId = ns("back"),
               label = "BACK",
+              width = "100%",
               class = "bg-primary"
             )
           }

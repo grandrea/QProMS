@@ -116,8 +116,8 @@ ui <- function(id) {
         ),
         br(),
         layout_columns(
-          actionButton(
-            inputId = ns("start"),
+          input_task_button(
+            id = ns("start"),
             label = "START",
             width = "100%",
             class = "bg-primary"

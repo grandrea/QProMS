@@ -1,6 +1,6 @@
 box::use(
   shiny[moduleServer, NS, selectInput, sliderInput, updateSelectInput, updateSliderInput, br, actionButton, observeEvent, icon, observe, req, conditionalPanel],
-  bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, accordion_panel_remove, tooltip],
+  bslib[page_sidebar, input_task_button, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, accordion_panel_remove, tooltip],
   echarts4r[echarts4rOutput, renderEcharts4r],
   gargoyle[watch, trigger],
   trelliscope[trelliscopeOutput, renderTrelliscope],
@@ -52,9 +52,9 @@ ui <- function(id) {
       )
     ),
     sidebar = sidebar(
-      actionButton(
-        inputId = ns("update"),
-        label = "UPDATE",
+      input_task_button(
+        id = ns("update"),
+        label = "PROCESS",
         class = "bg-primary"
       ),
       accordion(

@@ -1,6 +1,6 @@
 box::use(
   shiny[moduleServer, NS, selectInput, br, actionButton, observeEvent, updateSelectInput, observe, isolate, icon, reactive],
-  bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, tooltip, input_switch],
+  bslib[page_sidebar, layout_columns, input_task_button, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, tooltip, input_switch],
   echarts4r[echarts4rOutput, renderEcharts4r],
   trelliscope[trelliscopeOutput, renderTrelliscope],
   gargoyle[watch, trigger],
@@ -37,9 +37,9 @@ ui <- function(id) {
       )
     ),
     sidebar = sidebar(
-      actionButton(
-        inputId = ns("update"),
-        label = "UPDATE",
+      input_task_button(
+        id = ns("update"),
+        label = "PROCESS",
         class = "bg-primary"
       ),
       accordion(

@@ -37,7 +37,7 @@ ui <- function(id) {
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
