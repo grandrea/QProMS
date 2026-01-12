@@ -46,7 +46,7 @@ ui <- function(id) {
             id = ns("by_cond_input"),
             label = tooltip(
               trigger = list(
-                "Merge Condition",
+                "Merge Replicate",
                 icon("info-circle")
               ),
               "If TRUE, use the Intensity mean of each condition."

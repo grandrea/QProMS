@@ -160,6 +160,7 @@ QProMS <- R6Class(
       invisible(self)
     },
     table_raw_data = function() {
+      w <- self$raw_data %>% colnames() %>% nchar() %>% max()
       t <- self$raw_data %>% 
         head(15) %>% 
         reactable(
@@ -167,10 +168,12 @@ QProMS <- R6Class(
           striped = TRUE,
           resizable = TRUE,
           compact = TRUE,
+          bordered = TRUE,
           height = "auto",
           paginationType = "simple",
           showPageInfo = FALSE,
-          defaultPageSize = 15
+          defaultPageSize = 15,
+          defaultColDef = colDef(minWidth = w * 10)
         )
       return(t)
     },
@@ -2257,7 +2260,7 @@ QProMS <- R6Class(
           size = size
         ) %>%
         e_tooltip() %>%
-        e_toolbox_feature(feature = "saveAsImage") 
+        e_toolbox_feature(feature = c("saveAsImage", "restore"))
       
       if (show_names) {
         p <- p %>%
