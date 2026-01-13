@@ -91,7 +91,7 @@ server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
-    init("plot", "genes")
+    init("genes")
     
     observe({
       watch("session")
@@ -257,7 +257,7 @@ server <- function(id, r6, main_session) {
       r6$protein_rank_target <- r6$expdesign$label[1]
       r6$preprocessing()
       r6$shiny_wrap_workflow()
-      trigger("plot", "genes")
+      trigger("genes")
       nav_select("top_navigation", "Preprocessing", session = main_session)
       purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
       if (r6$with_statistics) {

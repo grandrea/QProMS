@@ -272,31 +272,26 @@ server <- function(id, r6, main_session) {
         p_adj_method = r6$go_gsea_p_adj_method
       )
       r6$print_gsea_table(r6$go_gsea_plot_arrenge)
-      trigger("plot")
+      output$bar_plot <- renderTrelliscope({
+        if(!is.null(r6$gsea_result_list)) {
+          r6$plot_gsea(r6$go_gsea_focus, r6$go_gsea_plot_arrenge, r6$go_gsea_top_n)
+        }
+      })
+      output$table <- renderReactable({
+        r6$reactable_interactive(table = r6$gsea_table, sel = "single")
+      })
+      gene_selected <- reactive(getReactableState("table", "selected"))
+      output$gseaplot <- renderPlot({
+        if(!is.null(r6$gsea_table)) {
+          group <- r6$gsea_table[gene_selected(),] %>%
+            pull(group)
+          highlights <- r6$gsea_table[gene_selected(),] %>%
+            pull(ID)
+          r6$plot_gseaplot(focus = group, gene_set_ID = highlights)
+        }
+      })
     })
 
-    output$bar_plot <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$gsea_result_list)) {
-        r6$plot_gsea(r6$go_gsea_focus, r6$go_gsea_plot_arrenge, r6$go_gsea_top_n)
-      }
-    })
-
-    output$table <- renderReactable({
-      watch("plot")
-      r6$reactable_interactive(table = r6$gsea_table, sel = "single")
-    })
     
-    gene_selected <- reactive(getReactableState("table", "selected"))
-    output$gseaplot <- renderPlot({
-      watch("plot")
-      if(!is.null(r6$gsea_table)) {
-        group <- r6$gsea_table[gene_selected(),] %>%
-          pull(group)
-        highlights <- r6$gsea_table[gene_selected(),] %>%
-          pull(ID)
-        r6$plot_gseaplot(focus = group, gene_set_ID = highlights)
-      }
-    })
   })
 }

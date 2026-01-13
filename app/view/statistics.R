@@ -167,40 +167,32 @@ server <- function(id, r6, main_session) {
         paired_test = r6$univariate_paired,
         test_type = r6$univariate_test_type
       )
-      trigger("plot", "stat")
+      trigger("stat")
+      gene_selected <- reactive(getReactableState("table_uni", "selected"))
+      output$volcano_plot <- renderTrelliscope({
+        if(!is.null(r6$stat_table)) {
+          table <- r6$print_stat_table()
+          highlights <- table[gene_selected(),] %>% 
+            pull(gene_names)
+          r6$plot_volcano(
+            r6$contrasts,
+            highlights,
+            r6$univariate_same_x,
+            r6$univariate_same_y
+          )
+        }
+      })
+      output$profile_plot_uni <- renderTrelliscope({
+        if(!is.null(r6$stat_table)) {
+          table <- r6$print_stat_table()
+          highlights <- table[gene_selected(),] %>% 
+            pull(gene_names)
+          r6$plot_stat_profile(tests = r6$contrasts, genes = highlights)
+        }
+      })
+      output$table_uni <- renderReactable({
+        r6$reactable_interactive(r6$print_stat_table())
+      })
     })
-    
-    gene_selected <- reactive(getReactableState("table_uni", "selected"))
-    
-    output$volcano_plot <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$stat_table)) {
-        table <- r6$print_stat_table()
-        highlights <- table[gene_selected(),] %>% 
-          pull(gene_names)
-        r6$plot_volcano(
-          r6$contrasts,
-          highlights,
-          r6$univariate_same_x,
-          r6$univariate_same_y
-        )
-      }
-    })
-    
-    output$profile_plot_uni <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$stat_table)) {
-        table <- r6$print_stat_table()
-        highlights <- table[gene_selected(),] %>% 
-          pull(gene_names)
-        r6$plot_stat_profile(tests = r6$contrasts, genes = highlights)
-      }
-    })
-    
-    output$table_uni <- renderReactable({
-      watch("plot")
-      r6$reactable_interactive(r6$print_stat_table())
-    })
-
   })
 }

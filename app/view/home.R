@@ -26,11 +26,11 @@ panels <- list(
 )
 
 #' @export
-ui <- function(id) {
+ui <- function(id, primary_col) {
   ns <- NS(id)
   page_fillable(
     div(
-      style = "background-color: #6EC1E4; width: 100%; height: calc(45vh - 28px); padding: 2rem; margin: 0; display: flex; position: relative;",
+      style = paste0("background-color: ",primary_col,"; width: 100%; height: calc(45vh - 28px); padding: 2rem; margin: 0; display: flex; position: relative;"),
       div(
         style = "width: 50%; display: flex; justify-content: center; align-items: center; padding: 2rem; margin: 2rem",
         h1("Quantitative Proteomics Made Simple",

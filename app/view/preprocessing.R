@@ -2,7 +2,7 @@ box::use(
   shiny[moduleServer, NS, selectInput, sliderInput, updateSelectInput, updateSliderInput, br, actionButton, observeEvent, icon, observe, req, conditionalPanel],
   bslib[page_sidebar, input_task_button, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, accordion_panel_remove, tooltip],
   echarts4r[echarts4rOutput, renderEcharts4r],
-  gargoyle[watch, trigger],
+  gargoyle[watch, trigger, init],
   trelliscope[trelliscopeOutput, renderTrelliscope],
   reactable[reactableOutput, renderReactable],
 )
@@ -248,49 +248,41 @@ server <- function(id, r6) {
       
       if(!is.null(r6$data)) {
         r6$shiny_wrap_workflow()
-        trigger("plot", "genes")
+        trigger("genes")
       }
-    })
-    output$protein_counts_plot <- renderEcharts4r({
-      watch("plot")
-      r6$plot_protein_counts() 
-    })
-    output$distribution_plot <- renderEcharts4r({
-      watch("plot")
-      r6$plot_distribution() 
-    })
-    output$valid_values_plot <- renderEcharts4r({
-      watch("plot")
-      r6$plot_protein_coverage() 
-    })
-    output$cv_plot <- renderEcharts4r({
-      watch("plot")
-      r6$plot_cv() 
-    })
-    output$missing_data_counts_plot <- renderEcharts4r({
-      watch("plot")
-      r6$plot_missing_data()
-    })
-    output$missval_distribution_plot <- renderTrelliscope({
-      watch("plot")
-      r6$plot_missval_distribution() 
+      output$protein_counts_plot <- renderEcharts4r({
+        r6$plot_protein_counts() 
+      })
+      output$distribution_plot <- renderEcharts4r({
+        r6$plot_distribution() 
+      })
+      output$valid_values_plot <- renderEcharts4r({
+        r6$plot_protein_coverage() 
+      })
+      output$cv_plot <- renderEcharts4r({
+        r6$plot_cv() 
+      })
+      output$missing_data_counts_plot <- renderEcharts4r({
+        r6$plot_missing_data()
+      })
+      output$missval_distribution_plot <- renderTrelliscope({
+        r6$plot_missval_distribution() 
+      })
+      output$post_imputation_plot <- renderEcharts4r({
+        if(r6$imp_methods == "none"){
+          r6$plot_imputation(data = r6$normalized_data, imp_visualization = FALSE) 
+        }else{
+          r6$plot_imputation(data = r6$imputed_data, imp_visualization = TRUE) 
+        }
+      })
+      output$imputed_table <- renderReactable({
+        if(r6$imp_methods == "none"){
+          r6$print_table(r6$normalized_data)
+        }else{
+          r6$print_table(r6$imputed_data)
+        }
+      })
     })
     
-    output$post_imputation_plot <- renderEcharts4r({
-      watch("plot")
-      if(r6$imp_methods == "none"){
-        r6$plot_imputation(data = r6$normalized_data, imp_visualization = FALSE) 
-      }else{
-        r6$plot_imputation(data = r6$imputed_data, imp_visualization = TRUE) 
-      }
-    })
-    output$imputed_table <- renderReactable({
-      watch("plot")
-      if(r6$imp_methods == "none"){
-        r6$print_table(r6$normalized_data)
-      }else{
-        r6$print_table(r6$imputed_data)
-      }
-    })
   })
 }

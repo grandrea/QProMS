@@ -259,31 +259,60 @@ server <- function(id, r6, main_session) {
         }
         focus_net <- "top_rank"
       }
-      
       if(r6$network_from_statistic == "univariate") {
         r6$network_focus_uni <- input$test_uni_input
         focus_net <- r6$network_focus_uni
       }
-      
       if(r6$network_from_statistic == "multivariate") {
         r6$network_focus_multi <- input$clusters_input
         focus_net <- r6$network_focus_multi
       }
-      
       r6$make_nodes(
         list_from = r6$network_from_statistic,
         focus = focus_net,
         direction = r6$network_uni_direction
       )
       r6$make_edges(source = r6$pdb_database)
-      
-      trigger("plot")
-    })
-    
-    output$network_plot <- renderEcharts4r({
-      watch("plot")
-      
-      if(!is.null(r6$nodes_table)) {
+      output$network_plot <- renderEcharts4r({
+        if(!is.null(r6$nodes_table)) {
+          nodes <- r6$print_nodes(
+            isolate_nodes = isolate(input$isolate_nodes_input),
+            score_thr = r6$network_score_thr
+          )
+          if(!is.null(nodes)) {
+            highlights <- nodes[gene_selected(), ] %>% 
+              pull(gene_names)
+            fil <- isolate(input$keep_selected)
+          } else {
+            highlights <- NULL
+          }
+          
+          if(length(highlights) == 0){
+            highlights <- NULL
+            fil <- FALSE
+          }
+          r6$plot_ppi_network(
+            list_from = r6$network_from_statistic,
+            score_thr = r6$network_score_thr,
+            isolate_nodes = isolate(input$isolate_nodes_input),
+            layout = isolate(input$layout),
+            show_names = isolate(input$names_input),
+            selected = highlights,
+            filtered = fil
+          )
+        } else {
+          NULL
+        }
+      })
+      gene_selected <- reactive(getReactableState("table_nodes", "selected"))
+      output$table_nodes <- renderReactable({
+        table <- r6$print_nodes(
+          isolate_nodes = isolate(input$isolate_nodes_input),
+          score_thr = r6$network_score_thr
+        )
+        r6$reactable_network(table, TRUE)
+      })
+      output$table_edges <- renderReactable({
         nodes <- r6$print_nodes(
           isolate_nodes = isolate(input$isolate_nodes_input),
           score_thr = r6$network_score_thr
@@ -291,57 +320,13 @@ server <- function(id, r6, main_session) {
         if(!is.null(nodes)) {
           highlights <- nodes[gene_selected(), ] %>% 
             pull(gene_names)
-          fil <- isolate(input$keep_selected)
-        } else {
-          highlights <- NULL
+          table <- r6$print_edges(
+            selected_nodes = highlights,
+            score_thr = r6$network_score_thr
+          )
+          r6$reactable_network(table, FALSE)
         }
-        
-        if(length(highlights) == 0){
-          highlights <- NULL
-          fil <- FALSE
-        }
-        r6$plot_ppi_network(
-          list_from = r6$network_from_statistic,
-          score_thr = r6$network_score_thr,
-          isolate_nodes = isolate(input$isolate_nodes_input),
-          layout = isolate(input$layout),
-          show_names = isolate(input$names_input),
-          selected = highlights,
-          filtered = fil
-        )
-      } else {
-        # r6$plot_empty_message("No network to display.")
-        NULL
-      }
+      })
     })
-    
-    gene_selected <- reactive(getReactableState("table_nodes", "selected"))
-    
-    output$table_nodes <- renderReactable({
-      watch("plot")
-      table <- r6$print_nodes(
-        isolate_nodes = isolate(input$isolate_nodes_input),
-        score_thr = r6$network_score_thr
-      )
-      r6$reactable_network(table, TRUE)
-    })
-    
-    output$table_edges <- renderReactable({
-      watch("plot")
-      nodes <- r6$print_nodes(
-        isolate_nodes = isolate(input$isolate_nodes_input),
-        score_thr = r6$network_score_thr
-      )
-      if(!is.null(nodes)) {
-        highlights <- nodes[gene_selected(), ] %>% 
-          pull(gene_names)
-        table <- r6$print_edges(
-          selected_nodes = highlights,
-          score_thr = r6$network_score_thr
-        )
-        r6$reactable_network(table, FALSE)
-      }
-    })
-
   })
 }

@@ -116,24 +116,18 @@ server <- function(id, r6) {
           selection = r6$protein_rank_selection,
           n_perc = r6$protein_rank_top_n
         )
-        trigger("plot")
+        output$table <- renderReactable({
+          r6$reactable_interactive(r6$print_rank_table())
+        })
+        gene_selected <- reactive(getReactableState("table", "selected"))
+        output$protein_rank_plot <- renderEcharts4r({
+          if(!is.null(r6$rank_data)) {
+            highlights <- r6$rank_data[gene_selected(),] %>%
+              pull(gene_names)
+            r6$plot_protein_rank(highlights_names = highlights)
+          }
+        })
       }
     })
-    
-    output$table <- renderReactable({
-      watch("plot")
-      r6$reactable_interactive(r6$print_rank_table())
-    })
-    
-    gene_selected <- reactive(getReactableState("table", "selected"))
-    output$protein_rank_plot <- renderEcharts4r({
-      watch("plot")
-      if(!is.null(r6$rank_data)) {
-        highlights <- r6$rank_data[gene_selected(),] %>%
-          pull(gene_names)
-        r6$plot_protein_rank(highlights_names = highlights)
-      }
-    })
-    
   })
 }

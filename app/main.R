@@ -1,6 +1,6 @@
 box::use(
   shiny[div, moduleServer, NS, strong, icon, tags],
-  bslib[page_navbar, page_sidebar, nav_panel, nav_item, sidebar, nav_spacer, page_fluid],
+  bslib[page_navbar, page_sidebar, nav_panel, nav_item, sidebar, nav_spacer, page_fluid, bs_theme],
 )
 
 box::use(
@@ -24,6 +24,8 @@ box::use(
   app/logic/R6Class_QProMS,
 )
 
+object <- R6Class_QProMS$QProMS$new()
+
 #' @export
 ui <- function(id) {
   ns <- NS(id)
@@ -31,10 +33,9 @@ ui <- function(id) {
     id = ns("top_navigation"),
     title = tags$a("QProMS", href = "?", style = "text-decoration: none; color: inherit;"),
     sidebar = NULL,
-    bg = "#6EC1E4",
+    bg = object$primary_color,
     gap = "1rem",
     header = list(
-      # use_empty_state(),
       tags$head(
         tags$link(
           href = "https://fonts.googleapis.com/css2?family=Tomorrow:wght@400;700&display=swap",
@@ -42,8 +43,9 @@ ui <- function(id) {
         )
       )
     ),
+    theme = bs_theme(version = 5, primary = object$primary_color), 
     nav_spacer(),
-    nav_panel(title = "Home", home$ui(ns("home")), style = "padding: 0 !important; margin: -1px;"),
+    nav_panel(title = "Home", home$ui(ns("home"), primary_col = object$primary_color), style = "padding: 0 !important; margin: -1px;"),
     nav_panel(title = "Design", upload$ui(ns("upload"))),
     nav_panel(title = "Preprocessing", preprocessing$ui(ns("preprocessing"))),
     nav_panel(title = "PCA", pca$ui(ns("pca"))),
@@ -65,7 +67,7 @@ server <- function(id) {
     ## Expand Shiny limits for upload
     options(shiny.maxRequestSize=10000*1024^2)
     ## Generate new object
-    object <- R6Class_QProMS$QProMS$new()
+    # object <- R6Class_QProMS$QProMS$new()
     ## Load modules server
     home$server("home", r6 = object, main_session = session)
     upload$server("upload", r6 = object, main_session = session)
