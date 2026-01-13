@@ -64,10 +64,10 @@ ui <- function(id) {
               id = ns("by_cond_input"),
               label = tooltip(
                 trigger = list(
-                  "Merge Condition",
+                  "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each condition."
+                "If TRUE, use the Intensity mean of each replicate."
               ),
               value = TRUE
             ),
@@ -199,6 +199,19 @@ server <- function(id, r6, main_session) {
         } else {
           updateSelectInput(inputId = "target", choices = r6$expdesign$label, selected = r6$expdesign$label[1])
         }
+      }
+      if(!r6$with_statistics) {
+        updateSelectInput(
+          inputId = "rank_with",
+          choices = c("Intensity" = "intensity"),
+          selected = "intensity"
+        )
+      } else {
+        updateSelectInput(
+          inputId = "rank_with",
+          choices = c("Fold change" = "fc", "Intensity" = "intensity"),
+          selected = "intensity"
+        )
       }
     })
     

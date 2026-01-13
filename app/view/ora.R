@@ -54,10 +54,10 @@ ui <- function(id) {
               id = ns("by_cond_input"),
               label = tooltip(
                 trigger = list(
-                  "Merge Condition",
+                  "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each condition."
+                "If TRUE, use the Intensity mean of each replicate."
               ),
               value = FALSE
             ),
@@ -271,6 +271,24 @@ server <- function(id, r6, main_session) {
         }
       }
       updateSelectizeInput(inputId = "gene_names_vector", choices = r6$filtered_gene_vector, server = TRUE)
+      if(!r6$with_statistics) {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c("Rank" = "top_rank", "Manual selection" = "manual"),
+          selected = "top_rank"
+        )
+      } else {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c(
+            "Rank" = "top_rank",
+            "Volcano" = "univariate",
+            "Heatmap" = "multivariate",
+            "Manual selection" = "manual"
+          ), 
+          selected = "top_rank"
+        )
+      }
     })
     
     

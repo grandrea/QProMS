@@ -8,9 +8,6 @@ box::use(
 box::use(
   app/view/statistics,
   app/view/heatmap,
-  app/view/network,
-  app/view/ora,
-  app/view/gsea,
 )
 
 panels <- list(
@@ -25,24 +22,6 @@ panels <- list(
     title  = "Heatmap",
     ui     = heatmap$ui,
     ns     = "heatmap"
-  ),
-  Network = list(
-    target = "Heatmap",
-    title  = "Network",
-    ui     = network$ui,
-    ns     = "network"
-  ),
-  ORA = list(
-    target = "Network",
-    title  = "ORA",
-    ui     = ora$ui,
-    ns     = "ora"
-  ),
-  GSEA = list(
-    target = "ORA",
-    title  = "GSEA",
-    ui     = gsea$ui,
-    ns     = "gsea"
   )
 )
 
@@ -237,8 +216,5 @@ server <- function(id, r6, main_session) {
     })
     statistics$server("statistics", r6 = r6, main_session = main_session)
     heatmap$server("heatmap", r6 = r6, main_session = main_session)
-    network$server("network", r6 = r6, main_session = main_session)
-    ora$server("ora", r6 = r6, main_session = main_session)
-    gsea$server("gsea", r6 = r6, main_session = main_session)
   })
 }
