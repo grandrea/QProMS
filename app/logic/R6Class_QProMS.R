@@ -118,11 +118,14 @@ QProMS <- R6Class(
     ora_table = NULL,
     go_ora_from_statistic = NULL,
     go_ora_focus = NULL,
+    go_ora_database = "GO",
     go_ora_alpha = 0.05,
     go_ora_p_adj_method = "BH",
     go_ora_term = "BP",
     go_ora_top_n = 10,
     go_ora_simplify_thr = 1,
+    go_ora_min_gs_size = 10,
+    go_ora_max_gs_size = 500,
     go_ora_background = FALSE,
     go_ora_plot_arrenge = "fold_enrichment",
     #######################
@@ -131,6 +134,7 @@ QProMS <- R6Class(
     go_gsea_by_cond = FALSE,
     gsea_table = NULL,
     go_gsea_rank_with = "fc",
+    go_gsea_database = "GO",
     go_gsea_tested_condition = NULL,
     go_gsea_alpha = 0.05,
     go_gsea_p_adj_method = "BH",
@@ -138,6 +142,8 @@ QProMS <- R6Class(
     go_gsea_focus = NULL,
     go_gsea_top_n = 10,
     go_gsea_simplify_thr = 1,
+    go_gsea_min_gs_size = 10,
+    go_gsea_max_gs_size = 500,
     go_gsea_plot_arrenge = "NES",
     ##########################
     # parameters for network #

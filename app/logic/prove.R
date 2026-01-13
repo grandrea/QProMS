@@ -127,3 +127,17 @@ r6$shiny_wrap_workflow()
 # ) 
 
 r6$plot_single_scatter(x = "control_1", y = "control_2",highlights_names = "")
+
+
+test %>% 
+  # purrr::compact() %>% 
+  names() %>% 
+  length()
+
+test %>% 
+  purrr::compact() %>% 
+  discard(is.list) %>% 
+  keep(~ length(.x) == 1) %>% 
+  tibble::enframe(name = "params", value = "value") %>% 
+  reactable::reactable(compact = TRUE, highlight = TRUE)
+

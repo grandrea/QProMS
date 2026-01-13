@@ -49,9 +49,11 @@ suppressPackageStartupMessages(library(reactable))
 box::use(app/logic/R6Class_QProMS)
 r6 <- R6Class_QProMS$QProMS$new()
 # Remove the comment below to download the report locally
-#r6$loading_parameters(input_path = here("app/logic/QProMS_session_internal.rds"), self = r6)
+# r6$loading_parameters(input_path = here("app/logic/QProMS_session_internal.rds"), self = r6)
+# param_list <- readRDS(here("app/logic/QProMS_session_internal.rds"))
 # This line loads the report from the server path (for production use)
 r6$loading_parameters(input_path = "/srv/shiny-server/app/logic/QProMS_session_internal.rds", self = r6)
+param_list <- readRDS("/srv/shiny-server/app/logic/QProMS_session_internal.rds")
 ```
 
 ```{r}
@@ -383,3 +385,18 @@ cat("::: \n")
 ```
 
 `r if(!GSEA_param) ":::"`
+
+## Session info
+
+In the following table are summarized all the parameters used by the QProMS software.
+
+```{r}
+#| label: "params table"
+
+param_list %>% 
+  purrr::compact() %>% 
+  keep(~ !is.list(.x) && length(.x) == 1) %>% 
+  tibble::enframe(name = "params", value = "value") %>% 
+  reactable::reactable(compact = TRUE, highlight = TRUE)
+```
+

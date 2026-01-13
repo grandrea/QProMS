@@ -170,7 +170,7 @@ server <- function(id, r6, main_session) {
         req(input$upload_params)
         if(!is.null(input$upload_params)) {
           r6$loading_parameters(input_path = input$upload_params$datapath, r6)
-          trigger("session", "plot", "genes")
+          trigger("session", "genes")
           nav_select("top_navigation", "Preprocessing", session = main_session)
           purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
           if (r6$with_statistics) {
@@ -194,7 +194,7 @@ server <- function(id, r6, main_session) {
       }
       if(input$start_nav == "Example Dataset") {
         r6$loading_parameters(input_path = "app/static/QProMS_example_dataset_p62.rds", r6)
-        trigger("session", "plot", "genes")
+        trigger("session", "genes")
         nav_select("top_navigation", "Preprocessing", session = main_session)
         purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
         purrr::walk(

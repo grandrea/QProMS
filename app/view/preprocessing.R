@@ -227,6 +227,8 @@ server <- function(id, r6) {
       if(!is.null(r6$input_type)) {
         if(!r6$input_type %in% c("MaxQuant", "PD")) {
           accordion_panel_remove("accordion", "Subset by Peptides", session = session)
+        }
+        if(r6$input_type != "MaxQuant") {
           accordion_panel_remove("accordion", "Remove Contaminants", session = session)
         }
       }

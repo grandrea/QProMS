@@ -66,8 +66,6 @@ server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ## Expand Shiny limits for upload
     options(shiny.maxRequestSize=10000*1024^2)
-    ## Generate new object
-    # object <- R6Class_QProMS$QProMS$new()
     ## Load modules server
     home$server("home", r6 = object, main_session = session)
     upload$server("upload", r6 = object, main_session = session)

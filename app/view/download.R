@@ -123,8 +123,8 @@ server <- function(id, r6) {
       if (!r6$with_statistics) {
         updateCheckboxGroupInput(
           inputId = "report_section",
-          choices = c("Preprocessing", "PCA", "Correlation", "Rank"),
-          selected = c("Preprocessing", "PCA", "Correlation", "Rank")
+          choices = c("Preprocessing", "PCA", "Correlation", "Rank", "Network", "ORA", "GSEA"),
+          selected = c("Preprocessing", "PCA", "Correlation", "Rank", "Network", "ORA", "GSEA")
         )
       } else {
         updateCheckboxGroupInput(
@@ -184,7 +184,6 @@ server <- function(id, r6) {
               Sys.sleep(1)
               params <- c("Preprocessing", "PCA", "Correlation", "Rank",
                           "Volcano", "Heatmap", "Network", "ORA", "GSEA")
-              
               incProgress(1/5, message = "Save session")
               Sys.sleep(1)
               r6$download_parameters(handler_file = "app/logic/QProMS_session_internal.rds", r6class = r6)
