@@ -84,7 +84,7 @@ ui <- function(id) {
               ),
               "Select the percentage of valid values."
             ),
-            min = 50,
+            min = 0,
             max = 100,
             value = 100,
             step = 5
