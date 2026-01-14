@@ -162,10 +162,11 @@ QProMS <- R6Class(
     loading_data = function(input_path, input_name) {
       self$raw_data <- fread(input = input_path) 
     },
-    loading_parameters = function(input_path, self) {
+    loading_parameters = function(input_path, self, print = FALSE) {
       parameters_list <- list.load(input_path)
       imap(parameters_list, ~ {self[[.y]] <- .x})
       invisible(self)
+      if(print){return(parameters_list)}
     },
     table_raw_data = function() {
       w <- self$raw_data %>% colnames() %>% nchar() %>% max()
