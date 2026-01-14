@@ -23,7 +23,7 @@ box::use(
   plotly[plotly_empty, config, layout],
   rlist[list.save, list.load],
   openxlsx[createStyle, createWorkbook, addWorksheet, writeDataTable, setColWidths, addStyle, saveWorkbook],
-  echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords]
+  echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords, e_lm]
 )
 
 box::use(
@@ -52,6 +52,7 @@ QProMS <- R6Class(
     plot_font_size = 16,
     palette = "D",
     color_palette = NULL,
+    primary_color = "#6EC1E4",
     #################################
     # parameters for data wrangling #
     filtered_data = NULL,
@@ -88,6 +89,7 @@ QProMS <- R6Class(
     #############################
     # parameters For Statistics #
     with_statistics = FALSE,
+    not_test_cond = NULL,
     all_test_combination = NULL, 
     contrasts = NULL,
     univariate = NULL,
@@ -116,11 +118,14 @@ QProMS <- R6Class(
     ora_table = NULL,
     go_ora_from_statistic = NULL,
     go_ora_focus = NULL,
+    go_ora_database = "GO",
     go_ora_alpha = 0.05,
     go_ora_p_adj_method = "BH",
     go_ora_term = "BP",
     go_ora_top_n = 10,
     go_ora_simplify_thr = 1,
+    go_ora_min_gs_size = 10,
+    go_ora_max_gs_size = 500,
     go_ora_background = FALSE,
     go_ora_plot_arrenge = "fold_enrichment",
     #######################
@@ -129,6 +134,7 @@ QProMS <- R6Class(
     go_gsea_by_cond = FALSE,
     gsea_table = NULL,
     go_gsea_rank_with = "fc",
+    go_gsea_database = "GO",
     go_gsea_tested_condition = NULL,
     go_gsea_alpha = 0.05,
     go_gsea_p_adj_method = "BH",
@@ -136,6 +142,8 @@ QProMS <- R6Class(
     go_gsea_focus = NULL,
     go_gsea_top_n = 10,
     go_gsea_simplify_thr = 1,
+    go_gsea_min_gs_size = 10,
+    go_gsea_max_gs_size = 500,
     go_gsea_plot_arrenge = "NES",
     ##########################
     # parameters for network #
@@ -154,12 +162,14 @@ QProMS <- R6Class(
     loading_data = function(input_path, input_name) {
       self$raw_data <- fread(input = input_path) 
     },
-    loading_parameters = function(input_path, self) {
+    loading_parameters = function(input_path, self, print = FALSE) {
       parameters_list <- list.load(input_path)
       imap(parameters_list, ~ {self[[.y]] <- .x})
       invisible(self)
+      if(print){return(parameters_list)}
     },
     table_raw_data = function() {
+      w <- self$raw_data %>% colnames() %>% nchar() %>% max()
       t <- self$raw_data %>% 
         head(15) %>% 
         reactable(
@@ -167,10 +177,12 @@ QProMS <- R6Class(
           striped = TRUE,
           resizable = TRUE,
           compact = TRUE,
+          bordered = TRUE,
           height = "auto",
           paginationType = "simple",
           showPageInfo = FALSE,
-          defaultPageSize = 15
+          defaultPageSize = 15,
+          defaultColDef = colDef(minWidth = w * 10)
         )
       return(t)
     },
@@ -336,8 +348,11 @@ QProMS <- R6Class(
           filter(count < 3)
         
         if (nrow(groups_with_less_than_3) > 0) {
+          self$not_test_cond <- groups_with_less_than_3 %>% pull(condition)
           results$condition_warning <- paste("warning The following groups have less than 3 replicates:", 
                                              paste(groups_with_less_than_3$condition, collapse = ", "))
+        } else {
+          self$not_test_cond <- NULL
         }
       }
       
@@ -383,7 +398,9 @@ QProMS <- R6Class(
     },
     define_tests = function() {
       conditions <- unique(self$expdesign$condition)
-      
+      if(!is.null(self$not_test_cond)) {
+        conditions <- conditions[! conditions %in% self$not_test_cond]
+      }
       self$all_test_combination <-
         expand_grid(cond1 = conditions, cond2 = conditions) %>%
         filter(cond1 != cond2) %>%
@@ -432,6 +449,21 @@ QProMS <- R6Class(
         required_columns <- c(gene_col, inputs_type_lists$metadata_list[[self$input_type]])
         initial_table <- left_join(initial_table, g_names, by = "Accession") %>%
           dplyr::filter(!stringr::str_detect(Accession, "ENSEMBL")) %>%
+          mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
+      } else if (self$input_type == "AlphaPept") {
+        gene_col <- "gene_symbol"
+        protein_col <- "uniprot_id"
+        required_columns <- gene_col
+        initial_table <- initial_table %>%
+          separate(
+            V1,
+            into = c("db", "uniprot_id", "gene"),
+            sep = "\\|",
+            fill = "right",
+            extra = "merge"
+          ) %>% 
+          mutate(gene_symbol = sub("_.*$", "", gene)) %>% 
+          filter(!stringr::str_detect(db, "REV_")) %>% 
           mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
       } else {
         required_columns <- inputs_type_lists$metadata_list[[self$input_type]]
@@ -765,7 +797,7 @@ QProMS <- R6Class(
           opacity = 1,
           color = "#555"
         ) %>%
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
     },
     plot_protein_counts = function() {
       
@@ -805,7 +837,7 @@ QProMS <- R6Class(
           )
         ) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -827,6 +859,7 @@ QProMS <- R6Class(
         e_tooltip(trigger = "item") %>%
         e_grid(containLabel = TRUE) %>%
         e_legend(show = FALSE) %>%
+        e_color(self$primary_color) %>% 
         e_y_axis(
           name = "log2 Intensity",
           nameLocation = "center",
@@ -839,7 +872,7 @@ QProMS <- R6Class(
         ) %>% 
         e_x_axis(show = FALSE) %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -859,7 +892,7 @@ QProMS <- R6Class(
         e_bar(occurrence) %>%
         e_tooltip(trigger = "item") %>%
         e_grid(containLabel = TRUE) %>%
-        e_color(self$color_palette) %>%
+        e_color(self$primary_color) %>%
         e_legend(textStyle = list(fontSize = self$plot_font_size)) %>%
         e_y_axis(
           name = "Counts",
@@ -873,7 +906,7 @@ QProMS <- R6Class(
         ) %>% 
         e_x_axis(axisLabel = list(fontSize = self$plot_font_size)) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -920,7 +953,7 @@ QProMS <- R6Class(
         e_grid(containLabel = TRUE) %>%
         e_color(self$color_palette) %>% 
         e_toolbox_feature(feature = "saveAsImage") %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -943,7 +976,7 @@ QProMS <- R6Class(
         e_bar(Missing, stack = "grp", bind = perc_missing) %>%
         e_x_axis(name = "", axisLabel = list(interval = 0, rotate = 45, fontSize = self$plot_font_size)) %>%
         e_tooltip(trigger = "item") %>%
-        e_color(c("#0d6efd", "#6c757d")) %>% 
+        e_color(c(self$primary_color, "#6c757d")) %>% 
         e_grid(containLabel = TRUE) %>%
         e_legend(textStyle = list(fontSize = self$plot_font_size)) %>%
         e_y_axis(
@@ -957,7 +990,7 @@ QProMS <- R6Class(
           )
         ) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -1007,9 +1040,9 @@ QProMS <- R6Class(
           )
         ) %>%
         e_grid(containLabel = TRUE) %>%
-        e_color(c("#0d6efd", "#bc3754")) %>% 
+        e_color(c(self$primary_color, "#bc3754")) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -1144,7 +1177,7 @@ QProMS <- R6Class(
           e_color(self$color_palette) %>% 
           e_grid(containLabel = TRUE) %>%
           e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
-          e_show_loading(text = "Loading...", color = "#0d6efd")
+          e_show_loading(text = "Loading...", color = self$primary_color)
       }else{
         p <- pca_table %>%
           group_by(condition) %>%
@@ -1193,12 +1226,11 @@ QProMS <- R6Class(
           e_color(self$color_palette) %>% 
           e_grid(containLabel = TRUE) %>%
           e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
-          e_show_loading(text = "Loading...", color = "#0d6efd")
+          e_show_loading(text = "Loading...", color = self$primary_color)
       }
       return(p)
     },
     plot_correlation = function() {
-      
       if(is.null(self$normalized_data)){return(NULL)}
       if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the correlation matrix."))}
       
@@ -1247,7 +1279,7 @@ QProMS <- R6Class(
           textStyle = list(fontSize = self$plot_font_size)
         ) %>%
         e_grid(containLabel = TRUE) %>%
-        e_show_loading(text = "Loading...", color = "#0d6efd") %>% 
+        e_show_loading(text = "Loading...", color = self$primary_color) %>% 
         e_toolbox_feature(feature = c("saveAsImage"))
       return(p)
     },
@@ -1276,7 +1308,7 @@ QProMS <- R6Class(
         e_scatter(y, legend = FALSE, symbol_size = 5, bind = gene_names) %>%
         e_x_axis(min = min_plot, max = max_plot) %>%
         e_y_axis(min = min_plot, max = max_plot) %>%
-        e_color(self$color_palette) %>%
+        e_color(self$primary_color) %>% 
         e_toolbox_feature(feature = "dataZoom") %>% 
         e_tooltip(
           formatter = JS("
@@ -1308,10 +1340,19 @@ QProMS <- R6Class(
         e_grid(containLabel = TRUE) %>%
         e_title(
           paste0("correlation: ", value),
-          left = "center",
+          left = "left",
           textStyle = list(fontSize = self$plot_font_size)
         ) %>%  
         e_toolbox_feature(feature = "saveAsImage")
+      
+      p <- p %>%
+        e_lm(
+          formula = y ~ x,
+          name = "Regression",
+          smooth = FALSE,
+          lineStyle = list(width = 2, type = "solid"),
+          itemStyle = list(color = "#1a1a1a")
+        )
       
       if (highlights_names != "") {
         for (name in str_split_1(highlights_names, ":")) {
@@ -1329,7 +1370,7 @@ QProMS <- R6Class(
               symbolSize = 50,
               silent = TRUE,
               label = list(color = "black", fontWeight = "normal", fontSize = 16),
-              itemStyle = list(color = "#0d6efd",  borderColor = "#0d6efd", borderWidth = 0.2)
+              itemStyle = list(color = self$primary_color,  borderColor = self$primary_color, borderWidth = 0.2)
             )
         }
       }
@@ -1367,10 +1408,8 @@ QProMS <- R6Class(
     plot_protein_rank = function(highlights_names = NULL) {
       
       if(is.null(self$rank_data)){return(NULL)}
-      colors <- viridis(n = 2 , direction = 1, end = 0.90, begin = 0.10, option = self$palette)
-      
       p <- self$rank_data %>%
-        mutate(color = if_else(gene_names %in% self$protein_rank_list, colors[2], colors[1])) %>%
+        mutate(color = if_else(gene_names %in% self$protein_rank_list, self$primary_color, "#6c757d")) %>%
         e_charts(rank, renderer = self$plot_format) %>%
         e_scatter(intensity,
                   legend = FALSE,
@@ -1433,8 +1472,8 @@ QProMS <- R6Class(
                 fontSize = 16
               ),
               itemStyle = list(
-                color = "#0d6efd",
-                borderColor = "#0d6efd",
+                color = self$primary_color,
+                borderColor = self$primary_color,
                 borderWidth = 0.2
               )
             )
@@ -1644,7 +1683,7 @@ QProMS <- R6Class(
         ) %>% 
         e_grid(containLabel = TRUE) %>%
         e_group("grp") %>%
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       # Aggiungere punti di evidenziazione
       if (highlights_names != "") {
@@ -1663,7 +1702,7 @@ QProMS <- R6Class(
               symbolSize = 50,
               silent = TRUE,
               label = list(color = "black", fontWeight = "normal", fontSize = 16),
-              itemStyle = list(color = "#0d6efd",  borderColor = "#0d6efd", borderWidth = 0.2)
+              itemStyle = list(color = self$primary_color,  borderColor = self$primary_color, borderWidth = 0.2)
             )
         }
       }
@@ -1972,7 +2011,7 @@ QProMS <- R6Class(
         e_grid(containLabel = TRUE) %>%
         e_tooltip() %>%
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataZoom")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -2029,7 +2068,7 @@ QProMS <- R6Class(
           )
         ) %>%
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataZoom")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       return(p)
     },
     plot_cluster_profile = function() {
@@ -2257,7 +2296,7 @@ QProMS <- R6Class(
           size = size
         ) %>%
         e_tooltip() %>%
-        e_toolbox_feature(feature = "saveAsImage") 
+        e_toolbox_feature(feature = c("saveAsImage", "restore"))
       
       if (show_names) {
         p <- p %>%
@@ -2510,7 +2549,7 @@ QProMS <- R6Class(
         e_bar(value, bind = Description) %>%
         e_flip_coords() %>%
         e_grid(containLabel = TRUE) %>%
-        e_color("#0d6efd") %>%
+        e_color(self$primary_color) %>%
         e_tooltip(
           formatter = JS(
             paste0("function(params){return('<strong>", arrange, ": </strong>' + params.value[0])}")
@@ -2530,7 +2569,7 @@ QProMS <- R6Class(
         e_legend(show = FALSE) %>%
         e_labels(show = TRUE, formatter= '{b}', position = "insideLeft") %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       return(p)
     },
     plot_ora = function(groups, arrange_with, show_n_category) {
@@ -2788,7 +2827,7 @@ QProMS <- R6Class(
         e_legend(show = FALSE) %>%
         e_labels(show = TRUE, formatter= '{b}', position = "insideLeft") %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       return(p)
     },
     plot_gsea = function(groups, arrange_with, show_n_category) {

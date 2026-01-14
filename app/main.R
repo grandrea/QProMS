@@ -1,6 +1,6 @@
 box::use(
   shiny[div, moduleServer, NS, strong, icon, tags],
-  bslib[page_navbar, page_sidebar, nav_panel, nav_item, sidebar, nav_spacer, page_fluid],
+  bslib[page_navbar, page_sidebar, nav_panel, nav_item, sidebar, nav_spacer, page_fluid, bs_theme],
 )
 
 box::use(
@@ -24,6 +24,8 @@ box::use(
   app/logic/R6Class_QProMS,
 )
 
+object <- R6Class_QProMS$QProMS$new()
+
 #' @export
 ui <- function(id) {
   ns <- NS(id)
@@ -31,10 +33,9 @@ ui <- function(id) {
     id = ns("top_navigation"),
     title = tags$a("QProMS", href = "?", style = "text-decoration: none; color: inherit;"),
     sidebar = NULL,
-    bg = "#6EC1E4",
+    bg = object$primary_color,
     gap = "1rem",
     header = list(
-      # use_empty_state(),
       tags$head(
         tags$link(
           href = "https://fonts.googleapis.com/css2?family=Tomorrow:wght@400;700&display=swap",
@@ -42,13 +43,17 @@ ui <- function(id) {
         )
       )
     ),
+    theme = bs_theme(version = 5, primary = object$primary_color), 
     nav_spacer(),
-    nav_panel(title = "Home", home$ui(ns("home")), style = "padding: 0 !important; margin: -1px;"),
+    nav_panel(title = "Home", home$ui(ns("home"), primary_col = object$primary_color), style = "padding: 0 !important; margin: -1px;"),
     nav_panel(title = "Design", upload$ui(ns("upload"))),
     nav_panel(title = "Preprocessing", preprocessing$ui(ns("preprocessing"))),
     nav_panel(title = "PCA", pca$ui(ns("pca"))),
     nav_panel(title = "Correlation", correlation$ui(ns("correlation"))),
     nav_panel(title = "Rank", rank$ui(ns("rank"))),
+    nav_panel(title = "Network", network$ui(ns("network"))),
+    nav_panel(title = "ORA", ora$ui(ns("ora"))),
+    nav_panel(title = "GSEA", gsea$ui(ns("gsea"))),
     nav_spacer(),
     nav_panel(title = "", value = "Save Results", icon = icon("download"), download$ui(ns("download"))),
     nav_panel(title = "", value = "Settings", icon = icon("gear"), settings$ui(ns("settings"))),
@@ -61,8 +66,6 @@ server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ## Expand Shiny limits for upload
     options(shiny.maxRequestSize=10000*1024^2)
-    ## Generate new object
-    object <- R6Class_QProMS$QProMS$new()
     ## Load modules server
     home$server("home", r6 = object, main_session = session)
     upload$server("upload", r6 = object, main_session = session)
@@ -70,6 +73,9 @@ server <- function(id) {
     pca$server("pca", r6 = object)
     correlation$server("correlation", r6 = object)
     rank$server("rank", r6 = object)
+    network$server("network", r6 = object, main_session = session)
+    ora$server("ora", r6 = object, main_session = session)
+    gsea$server("gsea", r6 = object, main_session = session)
     download$server("download", r6 = object)
     settings$server("settings", r6 = object, main_session = session)
     help$server("help", r6 = object, main_session = session)

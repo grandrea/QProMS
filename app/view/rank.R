@@ -1,6 +1,6 @@
 box::use(
   shiny[moduleServer, NS, selectInput, br, sliderInput, actionButton, icon, observe, updateSelectInput, reactive, observeEvent, updateSliderInput],
-  bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, input_switch, tooltip, update_switch],
+  bslib[page_sidebar, layout_columns, input_task_button, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, input_switch, tooltip, update_switch],
   gargoyle[watch, trigger],
   echarts4r[echarts4rOutput, renderEcharts4r],
   reactable[reactableOutput, renderReactable, getReactableState],
@@ -31,9 +31,9 @@ ui <- function(id) {
       )
     ),
     sidebar = sidebar(
-      actionButton(
-        inputId = ns("update"),
-        label = "UPDATE",
+      input_task_button(
+        id = ns("update"),
+        label = "PROCESS",
         class = "bg-primary"
       ),
       accordion(
@@ -46,10 +46,10 @@ ui <- function(id) {
             id = ns("by_cond_input"),
             label = tooltip(
               trigger = list(
-                "Merge Condition",
+                "Merge Replicate",
                 icon("info-circle")
               ),
-              "If TRUE, use the Intensity mean of each condition."
+              "If TRUE, use the Intensity mean of each replicate."
             ),
             value = FALSE
           ),
@@ -116,24 +116,18 @@ server <- function(id, r6) {
           selection = r6$protein_rank_selection,
           n_perc = r6$protein_rank_top_n
         )
-        trigger("plot")
+        output$table <- renderReactable({
+          r6$reactable_interactive(r6$print_rank_table())
+        })
+        gene_selected <- reactive(getReactableState("table", "selected"))
+        output$protein_rank_plot <- renderEcharts4r({
+          if(!is.null(r6$rank_data)) {
+            highlights <- r6$rank_data[gene_selected(),] %>%
+              pull(gene_names)
+            r6$plot_protein_rank(highlights_names = highlights)
+          }
+        })
       }
     })
-    
-    output$table <- renderReactable({
-      watch("plot")
-      r6$reactable_interactive(r6$print_rank_table())
-    })
-    
-    gene_selected <- reactive(getReactableState("table", "selected"))
-    output$protein_rank_plot <- renderEcharts4r({
-      watch("plot")
-      if(!is.null(r6$rank_data)) {
-        highlights <- r6$rank_data[gene_selected(),] %>%
-          pull(gene_names)
-        r6$plot_protein_rank(highlights_names = highlights)
-      }
-    })
-    
   })
 }

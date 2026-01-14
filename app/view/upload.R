@@ -1,6 +1,6 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, br, actionButton, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI],
-  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button, nav_insert],
+  shiny[moduleServer, NS, tags, selectInput, br, actionButton, selectizeInput, updateSelectizeInput, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI, textInput],
+  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button, nav_insert, layout_column_wrap],
   reactable[reactableOutput, renderReactable, reactable, colDef],
   rhandsontable[rHandsontableOutput, renderRHandsontable, hot_to_r],
   purrr[map, set_names, imap, keep_at, flatten_chr, discard_at, walk],
@@ -12,9 +12,6 @@ box::use(
 box::use(
   app/view/statistics,
   app/view/heatmap,
-  app/view/network,
-  app/view/ora,
-  app/view/gsea,
 )
 
 panels <- list(
@@ -29,24 +26,6 @@ panels <- list(
     title  = "Heatmap",
     ui     = heatmap$ui,
     ns     = "heatmap"
-  ),
-  Network = list(
-    target = "Heatmap",
-    title  = "Network",
-    ui     = network$ui,
-    ns     = "network"
-  ),
-  ORA = list(
-    target = "Network",
-    title  = "ORA",
-    ui     = ora$ui,
-    ns     = "ora"
-  ),
-  GSEA = list(
-    target = "ORA",
-    title  = "GSEA",
-    ui     = gsea$ui,
-    ns     = "gsea"
   )
 )
 
@@ -112,7 +91,7 @@ server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
-    init("plot", "genes")
+    init("genes")
     
     observe({
       watch("session")
@@ -176,11 +155,23 @@ server <- function(id, r6, main_session) {
                 "Select Gene Column",
                 choices = colnames(r6$raw_data)[sapply(r6$raw_data, is.character)]
               ),
-              selectInput(
+              textInput(
+                ns("intensity_pattern"),
+                "Filter intensity columns (regex or keyword)",
+                placeholder = "e.g. LFQ|Intensity|Sample_"
+              ),
+              selectizeInput(
                 ns("intensity_columns"),
-                "Select Intensity Columns",
-                colnames(r6$raw_data)[sapply(r6$raw_data, is.numeric)],
-                multiple = TRUE
+                "Intensity columns",
+                choices = NULL,
+                multiple = TRUE,
+                options = list(
+                  plugins = list("remove_button"),
+                  placeholder = "Select one or more intensity columns",
+                  maxItems = NULL,
+                  hideSelected = TRUE,
+                  dropdownParent = 'body'
+                )
               ),
               input_switch(
                 id = ns("log_transform"),
@@ -190,11 +181,13 @@ server <- function(id, r6, main_session) {
               selectInput(
                 inputId = ns("organism"),
                 label = "Organism",
-                choices = c("Homo Sapiens" = "human",
-                            "Mus Musculus" = "mouse",
-                            "Drosophila Melanogaster" = "drosophila",
-                            "Saccharomyces Cerevisiae" = "buddingyeast",
-                            "Escherichia Coli" = "ecoli"),
+                choices = c(
+                  "Homo Sapiens" = "human",
+                  "Mus Musculus" = "mouse",
+                  "Drosophila Melanogaster" = "drosophila",
+                  "Saccharomyces Cerevisiae" = "buddingyeast",
+                  "Escherichia Coli" = "ecoli"
+                ),
                 selected = "human"
               )
             )
@@ -203,6 +196,41 @@ server <- function(id, r6, main_session) {
       }
       
     })
+    
+    observeEvent(r6$raw_data, {
+      req(r6$raw_data)
+      updateSelectizeInput(
+        session,
+        "intensity_columns",
+        choices = colnames(r6$raw_data)[sapply(r6$raw_data, is.numeric)],
+        server = TRUE
+      )
+    })
+    observeEvent(input$intensity_pattern, {
+      req(r6$raw_data)
+      
+      all_numeric <- colnames(r6$raw_data)[sapply(r6$raw_data, is.numeric)]
+      
+      if (nzchar(input$intensity_pattern)) {
+        filtered <- grep(
+          input$intensity_pattern,
+          all_numeric,
+          value = TRUE,
+          ignore.case = TRUE
+        )
+      } else {
+        filtered <- all_numeric
+      }
+      
+      updateSelectizeInput(
+        session,
+        "intensity_columns",
+        choices = filtered,
+        selected = intersect(input$intensity_columns, filtered),
+        server = TRUE
+      )
+    })
+    
     observeEvent(input$confirm2, {
       if(!is.null(r6$raw_data)) {
         nav_select("upload_container", "Experimental Design")
@@ -243,14 +271,19 @@ server <- function(id, r6, main_session) {
         }
         output$define_action_button <- renderUI({
           if(result$validation_status){
-            input_task_button(
-              id = ns("start"),
-              label = "START"
+            bslib::layout_column_wrap(
+              width = 1,
+              input_task_button(
+                id = ns("start"),
+                label = "START",
+                width = "100%"
+              )
             )
           } else {
             actionButton(
               inputId = ns("back"),
               label = "BACK",
+              width = "100%",
               class = "bg-primary"
             )
           }
@@ -273,7 +306,7 @@ server <- function(id, r6, main_session) {
       r6$protein_rank_target <- r6$expdesign$label[1]
       r6$preprocessing()
       r6$shiny_wrap_workflow()
-      trigger("plot", "genes")
+      trigger("genes")
       nav_select("top_navigation", "Preprocessing", session = main_session)
       purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
       if (r6$with_statistics) {
@@ -297,8 +330,5 @@ server <- function(id, r6, main_session) {
     
     statistics$server("statistics", r6 = r6, main_session = main_session)
     heatmap$server("heatmap", r6 = r6, main_session = main_session)
-    network$server("network", r6 = r6, main_session = main_session)
-    ora$server("ora", r6 = r6, main_session = main_session)
-    gsea$server("gsea", r6 = r6, main_session = main_session)
   })
 }

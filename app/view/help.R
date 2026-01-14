@@ -38,7 +38,7 @@ ui <- function(id) {
           radioButtons(
             inputId = ns("software"),
             label = "",
-            choices = c("MaxQuant", "Proteome Discoverer (PD)"= "PD", "FragPipe", "DIA-NN", "Spectronaut"),
+            choices = c("MaxQuant", "Proteome Discoverer (PD)"= "PD", "FragPipe", "DIA-NN", "Spectronaut", "AlphaPept"),
             inline = TRUE
           )
         )
@@ -148,6 +148,11 @@ server <- function(id, r6, main_session) {
           tags$li("Format: .tsv"),
           tags$li("File: Report.tsv"),
           tags$li("Protein group–level report")
+        ),
+        "AlphaPept" = tags$ul(
+          tags$li("Format: .csv"),
+          tags$li("File: results_proteins.csv"),
+          tags$li("No or minimal manual modification required")
         )
       )
     })
@@ -201,6 +206,12 @@ server <- function(id, r6, main_session) {
         "Spectronaut" = tags$ul(
           tags$li("Support for PG.Quantity, PG.MS1Quantity, and PG.MS2Quantity"),
           tags$li("Protein identification is based on protein groups")
+        ),
+        "AlphaPept" = tags$ul(
+          tags$li("Support only for LFQ intensity values"),
+          tags$li("V1 column is automatically created when upload the table"),
+          tags$li("V1 column is splitted to exstract proteins ad genes information"),
+          tags$li("if V1 column fail to identify, rename the rownames with 'V1'")
         )
       )
     })

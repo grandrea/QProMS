@@ -44,7 +44,7 @@ ui <- function(id) {
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
@@ -138,40 +138,29 @@ server <- function(id, r6, main_session) {
         alpha = r6$anova_alpha,
         p_adj_method = r6$anova_p_adj_method
       )
-      
-      trigger("plot", "heatmap")
+      trigger("heatmap")
+      output$heatmap_plot <- renderPlotly({
+        if(!is.null(r6$anova_table)) {
+          r6$plot_heatmap(order_by_expdesing = r6$anova_manual_order)
+        }
+      })
+      output$plot_cluster_profile <- renderTrelliscope({
+        if(!is.null(r6$anova_table)) {
+          r6$plot_cluster_profile()
+        }
+      })
+      output$table_anova <- renderReactable({
+        r6$reactable_interactive(r6$print_anova_table())
+      })
+      gene_selected_anova <- reactive(getReactableState("table_anova", "selected"))
+      output$profile_protein_plot <- renderEcharts4r({
+        if(!is.null(r6$anova_table)) {
+          table <- r6$print_anova_table()
+          highlights <- table[gene_selected_anova(),] %>% 
+            pull(gene_names)
+          r6$plot_protein_profile(highlights) 
+        }
+      })
     })
-    output$heatmap_plot <- renderPlotly({
-      watch("plot")
-      if(!is.null(r6$anova_table)) {
-        r6$plot_heatmap(order_by_expdesing = r6$anova_manual_order)
-      }
-      
-    })
-    output$plot_cluster_profile <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$anova_table)) {
-        r6$plot_cluster_profile()
-      }
-    })
-    
-    output$table_anova <- renderReactable({
-      watch("plot")
-      r6$reactable_interactive(r6$print_anova_table())
-    })
-    
-    gene_selected_anova <- reactive(getReactableState("table_anova", "selected"))
-    
-    output$profile_protein_plot <- renderEcharts4r({
-      watch("plot")
-      if(!is.null(r6$anova_table)) {
-        table <- r6$print_anova_table()
-        highlights <- table[gene_selected_anova(),] %>% 
-          pull(gene_names)
-        r6$plot_protein_profile(highlights) 
-      }
-    })
-    
-    
   })
 }

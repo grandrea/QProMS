@@ -32,7 +32,7 @@ ui <- function(id) {
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
@@ -64,10 +64,10 @@ ui <- function(id) {
               id = ns("by_cond_input"),
               label = tooltip(
                 trigger = list(
-                  "Merge Condition",
+                  "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each condition."
+                "If TRUE, use the Intensity mean of each replicate."
               ),
               value = TRUE
             ),
@@ -200,6 +200,19 @@ server <- function(id, r6, main_session) {
           updateSelectInput(inputId = "target", choices = r6$expdesign$label, selected = r6$expdesign$label[1])
         }
       }
+      if(!r6$with_statistics) {
+        updateSelectInput(
+          inputId = "rank_with",
+          choices = c("Intensity" = "intensity"),
+          selected = "intensity"
+        )
+      } else {
+        updateSelectInput(
+          inputId = "rank_with",
+          choices = c("Fold change" = "fc", "Intensity" = "intensity"),
+          selected = "intensity"
+        )
+      }
     })
     
     observe({
@@ -231,9 +244,12 @@ server <- function(id, r6, main_session) {
       r6$go_gsea_rank_with <- input$rank_with
       r6$go_gsea_alpha <- input$alpha_input
       r6$go_gsea_p_adj_method <- input$truncation_input
+      r6$go_gsea_database <- input$database_input
       r6$go_gsea_term <- input$ontology_input
       r6$go_gsea_top_n <- input$show_category
       r6$go_gsea_simplify_thr <- input$simplify_thr
+      r6$go_gsea_min_gs_size <- input$minGSsize
+      r6$go_gsea_max_gs_size <- input$maxGSsize
       r6$go_gsea_plot_arrenge <- input$arrenged
      
       if(r6$go_gsea_rank_with == "fc") {
@@ -250,40 +266,35 @@ server <- function(id, r6, main_session) {
         test = r6$go_gsea_focus,
         rank_type = r6$go_gsea_rank_with,
         by_condition = r6$go_gsea_by_cond,
-        database = isolate(input$database_input),
+        database = r6$go_gsea_database,
         ontology = r6$go_gsea_term,
         simplify_thr = r6$go_gsea_simplify_thr,
         alpha = r6$go_gsea_alpha,
-        min_gs_size = isolate(input$minGSsize),
-        max_gs_size = isolate(input$maxGSsize),
+        min_gs_size = r6$go_gsea_min_gs_size,
+        max_gs_size = r6$go_gsea_max_gs_size,
         p_adj_method = r6$go_gsea_p_adj_method
       )
       r6$print_gsea_table(r6$go_gsea_plot_arrenge)
-      trigger("plot")
+      output$bar_plot <- renderTrelliscope({
+        if(!is.null(r6$gsea_result_list)) {
+          r6$plot_gsea(r6$go_gsea_focus, r6$go_gsea_plot_arrenge, r6$go_gsea_top_n)
+        }
+      })
+      output$table <- renderReactable({
+        r6$reactable_interactive(table = r6$gsea_table, sel = "single")
+      })
+      gene_selected <- reactive(getReactableState("table", "selected"))
+      output$gseaplot <- renderPlot({
+        if(!is.null(r6$gsea_table)) {
+          group <- r6$gsea_table[gene_selected(),] %>%
+            pull(group)
+          highlights <- r6$gsea_table[gene_selected(),] %>%
+            pull(ID)
+          r6$plot_gseaplot(focus = group, gene_set_ID = highlights)
+        }
+      })
     })
 
-    output$bar_plot <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$gsea_result_list)) {
-        r6$plot_gsea(r6$go_gsea_focus, r6$go_gsea_plot_arrenge, r6$go_gsea_top_n)
-      }
-    })
-
-    output$table <- renderReactable({
-      watch("plot")
-      r6$reactable_interactive(table = r6$gsea_table, sel = "single")
-    })
     
-    gene_selected <- reactive(getReactableState("table", "selected"))
-    output$gseaplot <- renderPlot({
-      watch("plot")
-      if(!is.null(r6$gsea_table)) {
-        group <- r6$gsea_table[gene_selected(),] %>%
-          pull(group)
-        highlights <- r6$gsea_table[gene_selected(),] %>%
-          pull(ID)
-        r6$plot_gseaplot(focus = group, gene_set_ID = highlights)
-      }
-    })
   })
 }

@@ -8,9 +8,6 @@ box::use(
 box::use(
   app/view/statistics,
   app/view/heatmap,
-  app/view/network,
-  app/view/ora,
-  app/view/gsea,
 )
 
 panels <- list(
@@ -25,33 +22,15 @@ panels <- list(
     title  = "Heatmap",
     ui     = heatmap$ui,
     ns     = "heatmap"
-  ),
-  Network = list(
-    target = "Heatmap",
-    title  = "Network",
-    ui     = network$ui,
-    ns     = "network"
-  ),
-  ORA = list(
-    target = "Network",
-    title  = "ORA",
-    ui     = ora$ui,
-    ns     = "ora"
-  ),
-  GSEA = list(
-    target = "ORA",
-    title  = "GSEA",
-    ui     = gsea$ui,
-    ns     = "gsea"
   )
 )
 
 #' @export
-ui <- function(id) {
+ui <- function(id, primary_col) {
   ns <- NS(id)
   page_fillable(
     div(
-      style = "background-color: #6EC1E4; width: 100%; height: calc(45vh - 28px); padding: 2rem; margin: 0; display: flex; position: relative;",
+      style = paste0("background-color: ",primary_col,"; width: 100%; height: calc(45vh - 28px); padding: 2rem; margin: 0; display: flex; position: relative;"),
       div(
         style = "width: 50%; display: flex; justify-content: center; align-items: center; padding: 2rem; margin: 2rem",
         h1("Quantitative Proteomics Made Simple",
@@ -116,8 +95,8 @@ ui <- function(id) {
         ),
         br(),
         layout_columns(
-          actionButton(
-            inputId = ns("start"),
+          input_task_button(
+            id = ns("start"),
             label = "START",
             width = "100%",
             class = "bg-primary"
@@ -191,7 +170,7 @@ server <- function(id, r6, main_session) {
         req(input$upload_params)
         if(!is.null(input$upload_params)) {
           r6$loading_parameters(input_path = input$upload_params$datapath, r6)
-          trigger("session", "plot", "genes")
+          trigger("session", "genes")
           nav_select("top_navigation", "Preprocessing", session = main_session)
           purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
           if (r6$with_statistics) {
@@ -215,7 +194,7 @@ server <- function(id, r6, main_session) {
       }
       if(input$start_nav == "Example Dataset") {
         r6$loading_parameters(input_path = "app/static/QProMS_example_dataset_p62.rds", r6)
-        trigger("session", "plot", "genes")
+        trigger("session", "genes")
         nav_select("top_navigation", "Preprocessing", session = main_session)
         purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
         purrr::walk(
@@ -237,8 +216,5 @@ server <- function(id, r6, main_session) {
     })
     statistics$server("statistics", r6 = r6, main_session = main_session)
     heatmap$server("heatmap", r6 = r6, main_session = main_session)
-    network$server("network", r6 = r6, main_session = main_session)
-    ora$server("ora", r6 = r6, main_session = main_session)
-    gsea$server("gsea", r6 = r6, main_session = main_session)
   })
 }

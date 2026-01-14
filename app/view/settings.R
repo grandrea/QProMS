@@ -84,7 +84,6 @@ server <- function(id, r6, main_session) {
       r6$plot_font_size <- input$text_sixe
       if(!is.null(r6$expdesign)) {
         r6$define_colors()
-        trigger("plot")
       }
       shinyalert(
         title = "Setting Updated!",

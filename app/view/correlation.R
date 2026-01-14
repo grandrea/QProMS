@@ -1,6 +1,6 @@
 box::use(
   shiny[moduleServer, NS, selectInput, br, actionButton, observeEvent, updateSelectInput, observe, isolate, icon, reactive],
-  bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, tooltip, input_switch],
+  bslib[page_sidebar, layout_columns, input_task_button, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, tooltip, input_switch],
   echarts4r[echarts4rOutput, renderEcharts4r],
   trelliscope[trelliscopeOutput, renderTrelliscope],
   gargoyle[watch, trigger],
@@ -37,9 +37,9 @@ ui <- function(id) {
       )
     ),
     sidebar = sidebar(
-      actionButton(
-        inputId = ns("update"),
-        label = "UPDATE",
+      input_task_button(
+        id = ns("update"),
+        label = "PROCESS",
         class = "bg-primary"
       ),
       accordion(
@@ -98,46 +98,47 @@ server <- function(id, r6) {
     
     observeEvent(input$update, {
       r6$cor_method <- input$correlation_input
-      trigger("plot")
-    })
-    
-    output$correlation_plot <- renderEcharts4r({
-      watch("plot")
-      r6$plot_correlation() 
-    })
-    
-    gene_selected <- reactive(getReactableState("table", "selected"))
-    
-    output$table <- renderReactable({
-      watch("plot")
-      if(!is.null(r6$imputed_data)) {
+      output$correlation_plot <- renderEcharts4r({
+        r6$plot_correlation() 
+      })
+      
+      gene_selected <- reactive(getReactableState("table", "selected"))
+      
+      output$table <- renderReactable({
+        if(!is.null(r6$imputed_data)) {
+          if(r6$imp_methods == "none"){
+            data <- r6$print_table(r6$normalized_data, df = TRUE)
+            r6$reactable_interactive(data)
+          }else{
+            data <- r6$print_table(r6$imputed_data, df = TRUE)
+            r6$reactable_interactive(data)
+          }
+        }
+      })
+      
+      output$scatter_plot <- renderTrelliscope({
+        highlights <- NULL
         if(r6$imp_methods == "none"){
           data <- r6$print_table(r6$normalized_data, df = TRUE)
-          r6$reactable_interactive(data)
+          if(!is.null(gene_selected())){
+            highlights <- data[gene_selected(), ] %>% pull(gene_names)
+          }
         }else{
           data <- r6$print_table(r6$imputed_data, df = TRUE)
-          r6$reactable_interactive(data)
+          if(!is.null(gene_selected())){
+            highlights <- data[gene_selected(), ] %>% pull(gene_names)
+          }
         }
-      }
+        x <- isolate(input$x_filter)
+        y <- isolate(input$y_filter)
+        
+        if (length(x) > 0 && length(y) > 0 && !identical(x, y)) {
+          if ((length(x) == 1 && length(y) == 1 && x != y) || length(x) > 1 || length(y) > 1) {
+            r6$plot_multi_scatter(highlights, x_filter = x, y_filter = y)
+          }
+        }
+      })
     })
     
-    output$scatter_plot <- renderTrelliscope({
-      watch("plot")
-      if(r6$imp_methods == "none"){
-        data <- r6$print_table(r6$normalized_data, df = TRUE)
-        highlights <- data[gene_selected(), ] %>% pull(gene_names)
-      }else{
-        data <- r6$print_table(r6$imputed_data, df = TRUE)
-        highlights <- data[gene_selected(), ] %>% pull(gene_names)
-      }
-      x <- isolate(input$x_filter)
-      y <- isolate(input$y_filter)
-      
-      if (length(x) > 0 && length(y) > 0 && !identical(x, y)) {
-        if ((length(x) == 1 && length(y) == 1 && x != y) || length(x) > 1 || length(y) > 1) {
-          r6$plot_multi_scatter(highlights, x_filter = x, y_filter = y)
-        }
-      }
-    })
   })
 }

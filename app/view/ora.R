@@ -28,7 +28,7 @@ ui <- function(id) {
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
@@ -54,10 +54,10 @@ ui <- function(id) {
               id = ns("by_cond_input"),
               label = tooltip(
                 trigger = list(
-                  "Merge Condition",
+                  "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each condition."
+                "If TRUE, use the Intensity mean of each replicate."
               ),
               value = FALSE
             ),
@@ -271,6 +271,24 @@ server <- function(id, r6, main_session) {
         }
       }
       updateSelectizeInput(inputId = "gene_names_vector", choices = r6$filtered_gene_vector, server = TRUE)
+      if(!r6$with_statistics) {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c("Rank" = "top_rank", "Manual selection" = "manual"),
+          selected = "top_rank"
+        )
+      } else {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c(
+            "Rank" = "top_rank",
+            "Volcano" = "univariate",
+            "Heatmap" = "multivariate",
+            "Manual selection" = "manual"
+          ), 
+          selected = "top_rank"
+        )
+      }
     })
     
     
@@ -278,16 +296,18 @@ server <- function(id, r6, main_session) {
       r6$go_ora_from_statistic <- input$strategy
       r6$go_ora_alpha <- as.double(input$alpha_input)
       r6$go_ora_p_adj_method <- input$truncation_input
+      r6$go_ora_database <- input$database_input
       r6$go_ora_term <- input$ontology_input
       r6$go_ora_top_n <- input$show_category
       r6$go_ora_simplify_thr <- input$simplify_thr
+      r6$go_ora_min_gs_size <- input$minGSsize
+      r6$go_ora_max_gs_size <- input$maxGSsize
       r6$go_ora_background <- input$background_input
       r6$go_ora_plot_arrenge <- input$arrenged
       
       if(r6$go_ora_from_statistic == "univariate") {
         r6$go_ora_focus <- input$volcano_input
       }
-      
       if(r6$go_ora_from_statistic == "top_rank") {
         r6$protein_rank_target <- input$target
         r6$protein_rank_by_cond <- input$by_cond_input
@@ -303,44 +323,35 @@ server <- function(id, r6, main_session) {
         }
         r6$go_ora_focus <- r6$protein_rank_target
       }
-      
       if(r6$go_ora_from_statistic == "multivariate") {
         r6$go_ora_focus <- input$clusters_input
       }
-      
       if(r6$go_ora_from_statistic == "manual") {
         r6$go_ora_focus <- input$gene_names_vector
       }
-      
       r6$go_ora(
         list_from = r6$go_ora_from_statistic,
-        database = isolate(input$database_input),
+        database = r6$go_ora_database,
         focus = r6$go_ora_focus,
         ontology = r6$go_ora_term,
         simplify_thr = r6$go_ora_simplify_thr,
         alpha = r6$go_ora_alpha,
         p_adj_method = r6$go_ora_p_adj_method,
-        min_gs_size = isolate(input$minGSsize),
-        max_gs_size = isolate(input$maxGSsize),
+        min_gs_size = r6$go_ora_min_gs_size,
+        max_gs_size = r6$go_ora_max_gs_size,
         background = r6$go_ora_background
       )
       r6$print_ora_table(r6$go_ora_plot_arrenge)
-      trigger("plot")
+      output$bar_plot <- renderTrelliscope({
+        if(!is.null(r6$ora_result_list)) {
+          focus_plot <- r6$go_ora_focus
+          if(r6$go_ora_from_statistic == "manual") {focus_plot <- "manual"}
+          r6$plot_ora(focus_plot, r6$go_ora_plot_arrenge, r6$go_ora_top_n)
+        }
+      })
+      output$table <- renderReactable({
+        r6$reactable_functional_analysis(r6$ora_table)
+      })
     })
-   
-    output$bar_plot <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$ora_result_list)) {
-        focus_plot <- r6$go_ora_focus
-        if(r6$go_ora_from_statistic == "manual") {focus_plot <- "manual"}
-        r6$plot_ora(focus_plot, r6$go_ora_plot_arrenge, r6$go_ora_top_n)
-      }
-    })
-    
-    output$table <- renderReactable({
-      watch("plot")
-      r6$reactable_functional_analysis(r6$ora_table)
-    })
-    
   })
 }
