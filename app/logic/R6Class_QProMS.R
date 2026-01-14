@@ -449,6 +449,21 @@ QProMS <- R6Class(
         initial_table <- left_join(initial_table, g_names, by = "Accession") %>%
           dplyr::filter(!stringr::str_detect(Accession, "ENSEMBL")) %>%
           mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
+      } else if (self$input_type == "AlphaPept") {
+        gene_col <- "gene_symbol"
+        protein_col <- "uniprot_id"
+        required_columns <- gene_col
+        initial_table <- initial_table %>%
+          separate(
+            V1,
+            into = c("db", "uniprot_id", "gene"),
+            sep = "\\|",
+            fill = "right",
+            extra = "merge"
+          ) %>% 
+          mutate(gene_symbol = sub("_.*$", "", gene)) %>% 
+          filter(!stringr::str_detect(db, "REV_")) %>% 
+          mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
       } else {
         required_columns <- inputs_type_lists$metadata_list[[self$input_type]]
         gene_col <- required_columns[1]

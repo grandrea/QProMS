@@ -16,7 +16,7 @@ box::use(app/static/contaminants)
 
 r6 <- R6Class_QProMS$QProMS$new()
 # r6$loading_data(input_path = "app/static/proteinGroups.txt", input_name = "test")
-r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/Proteome_Discoverer.txt", input_name = "test")
+r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/results_proteins2.csv", input_name = "test")
 # a <- r6$loading_parameters(input_path = "/Users/bedin.fabio/Desktop/QProMS_parameters_2024-09-04.yaml", r6)
 msg <- r6$identify_table_type()
 r6$create_summary_table()
@@ -141,3 +141,15 @@ test %>%
   tibble::enframe(name = "params", value = "value") %>% 
   reactable::reactable(compact = TRUE, highlight = TRUE)
 
+r6$raw_data %>% 
+  dplyr::select(Gene) %>% 
+  tidyr::separate(
+    Gene,
+    into = c("db", "uniprot_id", "gene"),
+    sep = "\\|",
+    fill = "right",
+    extra = "merge"
+  ) %>% 
+  mutate(gene_names = sub("_.*$", "", gene)) %>%
+  dplyr::filter(!stringr::str_detect(db, "REV_")) %>% 
+  View()
