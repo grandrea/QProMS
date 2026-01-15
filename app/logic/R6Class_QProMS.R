@@ -919,6 +919,7 @@ QProMS <- R6Class(
         summarise(genes = list(bin_intensity)) %>% 
         deframe() %>% 
         as.data.frame()
+      if(ncol(upset_df) < 2){return(NULL)}
       
       p <- upset(
         upset_df,

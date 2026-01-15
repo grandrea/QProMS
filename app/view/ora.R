@@ -329,19 +329,23 @@ server <- function(id, r6, main_session) {
       if(r6$go_ora_from_statistic == "manual") {
         r6$go_ora_focus <- input$gene_names_vector
       }
-      r6$go_ora(
-        list_from = r6$go_ora_from_statistic,
-        database = r6$go_ora_database,
-        focus = r6$go_ora_focus,
-        ontology = r6$go_ora_term,
-        simplify_thr = r6$go_ora_simplify_thr,
-        alpha = r6$go_ora_alpha,
-        p_adj_method = r6$go_ora_p_adj_method,
-        min_gs_size = r6$go_ora_min_gs_size,
-        max_gs_size = r6$go_ora_max_gs_size,
-        background = r6$go_ora_background
-      )
-      r6$print_ora_table(r6$go_ora_plot_arrenge)
+      tryCatch({
+        r6$go_ora(
+          list_from = r6$go_ora_from_statistic,
+          database = r6$go_ora_database,
+          focus = r6$go_ora_focus,
+          ontology = r6$go_ora_term,
+          simplify_thr = r6$go_ora_simplify_thr,
+          alpha = r6$go_ora_alpha,
+          p_adj_method = r6$go_ora_p_adj_method,
+          min_gs_size = r6$go_ora_min_gs_size,
+          max_gs_size = r6$go_ora_max_gs_size,
+          background = r6$go_ora_background
+        )
+        r6$print_ora_table(r6$go_ora_plot_arrenge)
+      }, error = function(e) {
+        return(NULL)
+      })
       output$bar_plot <- renderTrelliscope({
         if(!is.null(r6$ora_result_list)) {
           focus_plot <- r6$go_ora_focus

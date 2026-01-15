@@ -272,7 +272,11 @@ server <- function(id, r6, main_session) {
         focus = focus_net,
         direction = r6$network_uni_direction
       )
-      r6$make_edges(source = r6$pdb_database)
+      tryCatch({
+        r6$make_edges(source = r6$pdb_database)
+      }, error = function(e) {
+        return(NULL)
+      })
       output$network_plot <- renderEcharts4r({
         if(!is.null(r6$nodes_table)) {
           nodes <- r6$print_nodes(

@@ -261,20 +261,24 @@ server <- function(id, r6, main_session) {
         r6$go_gsea_focus <- input$target
         r6$go_gsea_by_cond <- input$by_cond_input
       }
-
-      r6$go_gsea(
-        test = r6$go_gsea_focus,
-        rank_type = r6$go_gsea_rank_with,
-        by_condition = r6$go_gsea_by_cond,
-        database = r6$go_gsea_database,
-        ontology = r6$go_gsea_term,
-        simplify_thr = r6$go_gsea_simplify_thr,
-        alpha = r6$go_gsea_alpha,
-        min_gs_size = r6$go_gsea_min_gs_size,
-        max_gs_size = r6$go_gsea_max_gs_size,
-        p_adj_method = r6$go_gsea_p_adj_method
-      )
-      r6$print_gsea_table(r6$go_gsea_plot_arrenge)
+      
+      tryCatch({
+        r6$go_gsea(
+          test = r6$go_gsea_focus,
+          rank_type = r6$go_gsea_rank_with,
+          by_condition = r6$go_gsea_by_cond,
+          database = r6$go_gsea_database,
+          ontology = r6$go_gsea_term,
+          simplify_thr = r6$go_gsea_simplify_thr,
+          alpha = r6$go_gsea_alpha,
+          min_gs_size = r6$go_gsea_min_gs_size,
+          max_gs_size = r6$go_gsea_max_gs_size,
+          p_adj_method = r6$go_gsea_p_adj_method
+        )
+        r6$print_gsea_table(r6$go_gsea_plot_arrenge)
+      }, error = function(e) {
+        return(NULL)
+      })
       output$bar_plot <- renderTrelliscope({
         if(!is.null(r6$gsea_result_list)) {
           r6$plot_gsea(r6$go_gsea_focus, r6$go_gsea_plot_arrenge, r6$go_gsea_top_n)
