@@ -1,6 +1,6 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, sliderInput, updateSelectInput, updateSliderInput, br, actionButton, observeEvent, icon, observe, req, conditionalPanel, reactiveVal],
-  bslib[page_sidebar, input_task_button, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, accordion_panel_remove, tooltip],
+  shiny[moduleServer, NS, selectInput, sliderInput, isolate, updateSelectInput, updateSliderInput, br, actionButton, observeEvent, icon, observe, req, conditionalPanel, reactiveVal, renderPlot, plotOutput],
+  bslib[page_sidebar, input_task_button, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, accordion_panel_remove, tooltip, nav_hide, nav_show],
   echarts4r[echarts4rOutput, renderEcharts4r],
   gargoyle[watch, trigger, init],
   trelliscope[trelliscopeOutput, renderTrelliscope],
@@ -23,8 +23,12 @@ ui <- function(id) {
           echarts4rOutput(ns("distribution_plot"))
         ),
         nav_panel(
-          "Upset Plot",
+          "Coverage",
           echarts4rOutput(ns("valid_values_plot"))
+        ),
+        nav_panel(
+          "Intersection",
+          plotOutput(ns("upset_plot"))
         ),
         nav_panel(
           title = tooltip(
@@ -269,14 +273,17 @@ server <- function(id, r6) {
         output$valid_values_plot <- renderEcharts4r({
           r6$plot_protein_coverage() 
         })
+        output$upset_plot <- renderPlot({
+          r6$plot_protein_coverage_intersections() 
+        })
         output$cv_plot <- renderEcharts4r({
           r6$plot_cv() 
         })
-        output$missing_data_counts_plot <- renderEcharts4r({
-          r6$plot_missing_data()
-        })
         output$missval_distribution_plot <- renderTrelliscope({
           r6$plot_missval_distribution() 
+        })
+        output$missing_data_counts_plot <- renderEcharts4r({
+          r6$plot_missing_data()
         })
         output$post_imputation_plot <- renderEcharts4r({
           if(r6$imp_methods == "none"){

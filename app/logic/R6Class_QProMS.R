@@ -20,6 +20,7 @@ box::use(
   rhandsontable[rhandsontable, hot_col],
   trelliscope[panel_lazy, as_trelliscope_df, set_default_layout, add_trelliscope_resource_path],
   heatmaply[heatmaply],
+  UpSetR[upset],
   plotly[plotly_empty, config, layout],
   rlist[list.save, list.load],
   openxlsx[createStyle, createWorkbook, addWorksheet, writeDataTable, setColWidths, addStyle, saveWorkbook],
@@ -908,6 +909,24 @@ QProMS <- R6Class(
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataView")) %>% 
         e_show_loading(text = "Loading...", color = self$primary_color)
       
+      return(p)
+    },
+    plot_protein_coverage_intersections = function() {
+      
+      if(is.null(self$filtered_data)){return(NULL)}
+      upset_df <- self$filtered_data %>% 
+        group_by(label) %>%
+        summarise(genes = list(bin_intensity)) %>% 
+        deframe() %>% 
+        as.data.frame()
+      
+      p <- upset(
+        upset_df,
+        nsets = ncol(upset_df),
+        order.by = "freq",
+        main.bar.color = self$primary_color,
+        text.scale = 1.5
+      )
       return(p)
     },
     plot_cv = function() {

@@ -525,6 +525,24 @@
       ],
       "Hash": "7fba3f587b0f3cb3232d03d540dbf772"
     },
+    "UpSetR": {
+      "Package": "UpSetR",
+      "Version": "1.4.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "ggplot2",
+        "grDevices",
+        "gridExtra",
+        "methods",
+        "plyr",
+        "scales",
+        "stats",
+        "utils"
+      ],
+      "Hash": "f6ef89503aaff474873f8bc1823894e1"
+    },
     "XML": {
       "Package": "XML",
       "Version": "3.99-0.17",

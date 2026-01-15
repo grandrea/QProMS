@@ -8,6 +8,7 @@ library(trelliscope)
 library(rbioapi)
 library(org.Hs.eg.db)
 library(clusterProfiler)
+library(UpSetR)
 
 box::use(app/logic/R6Class_QProMS)
 box::reload(R6Class_QProMS)
@@ -16,7 +17,7 @@ box::use(app/static/contaminants)
 
 r6 <- R6Class_QProMS$QProMS$new()
 # r6$loading_data(input_path = "app/static/proteinGroups.txt", input_name = "test")
-r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/results_proteins2.csv", input_name = "test")
+r6$loading_data(input_path = "/Users/bedin.fabio/Documents/dataset_qproms/Proteome_Discoverer.txt", input_name = "test")
 # a <- r6$loading_parameters(input_path = "/Users/bedin.fabio/Desktop/QProMS_parameters_2024-09-04.yaml", r6)
 msg <- r6$identify_table_type()
 r6$create_summary_table()
@@ -153,3 +154,28 @@ r6$raw_data %>%
   mutate(gene_names = sub("_.*$", "", gene)) %>%
   dplyr::filter(!stringr::str_detect(db, "REV_")) %>% 
   View()
+
+upset_df <- r6$filtered_data %>% 
+  group_by(label) %>%
+  summarise(genes = list(bin_intensity)) %>% 
+  deframe() %>% 
+  as.data.frame()
+
+upset(
+  upset_df,
+  nsets = ncol(upset_df),
+  order.by = "freq",
+  main.bar.color = "#6EC1E4",
+  text.scale = 1.5
+)
+
+list_sets %>% as.data.frame() %>% View()
+
+r6$filtered_data %>% View()
+  group_by(gene_names) %>%
+  summarise(counts = sum(bin_intensity)) %>% View()
+  ungroup() %>%
+  select(counts) %>%
+  table() %>%
+  as_tibble() %>%
+  rename(occurrence = n) %>% View()
