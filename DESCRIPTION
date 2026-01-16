@@ -1,0 +1,49 @@
+# Apri DESCRIPTION e SOSTITUISCI TUTTO con:
+Package: qproms
+Type: Package
+Title: QProMS - Quantitative Proteomics Made Simple
+Version: 0.1.0
+Author: Fabio Bedin and QProMS Team
+Maintainer: Fabio Bedin <fabio.bedin.123@gmail.com>
+Description: Shiny application for quantitative proteomics analysis
+    packaged as an R package and runnable with a single function.
+License: GPL-3
+Depends: 
+    R (>= 4.3)
+Imports: 
+    shiny,
+    rhino,
+    gargoyle,
+    box
+Suggests: 
+    BiocManager,
+    vsn,
+    clusterProfiler,
+    OmnipathR,
+    org.Hs.eg.db,
+    org.Mm.eg.db,
+    org.EcK12.eg.db,
+    org.Dm.eg.db,
+    org.Sc.sgd.db,
+    trelliscopejs,
+    ggtree,
+    ggtreeExtra,
+    heatmaply,
+    openxlsx,
+    echarts4r,
+    esquisse,
+    reactable,
+    rhandsontable,
+    shinyalert,
+    rlist,
+    rbioapi,
+    quarto,
+    viridis
+Remotes: 
+    trelliscope/trelliscope,
+    YuLab-SMU/ggtree
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.3
+
+
