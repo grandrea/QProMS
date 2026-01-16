@@ -27,9 +27,6 @@ box::use(
   echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords, e_lm]
 )
 
-pkg_dir <- system.file(package = "qproms")
-source(file.path(pkg_dir, "app/static/inputs_type_lists.R"), local = TRUE)
-source(file.path(pkg_dir, "app/static/contaminants.R"), local = TRUE)
 
 #' @export
 QProMS <- R6Class(
@@ -52,6 +49,8 @@ QProMS <- R6Class(
     plot_font_size = 16,
     palette = "D",
     color_palette = NULL,
+    inputs_type_lists = NULL,
+    contaminants = NULL,    
     primary_color = "#6EC1E4",
     #################################
     # parameters for data wrangling #
@@ -159,6 +158,21 @@ QProMS <- R6Class(
     pdb_database = NULL,
     ###########
     # Methods #
+    initialize = function() {
+      pkg_dir <- system.file(package = "qproms")
+      
+      # Carica inputs_type_lists
+      env1 <- new.env()
+      source(file.path(pkg_dir, "app/static/inputs_type_lists.R"), local = env1)
+      self$inputs_type_lists <- env1
+      
+      # Carica contaminants
+      env2 <- new.env()
+      source(file.path(pkg_dir, "app/static/contaminants.R"), local = env2)
+      self$contaminants <- env2
+      
+      invisible(self)
+    },
     loading_data = function(input_path, input_name) {
       self$raw_data <- fread(input = input_path) 
     },
@@ -217,8 +231,8 @@ QProMS <- R6Class(
     },
     identify_table_type = function() {
       data <- self$raw_data
-      required_columns_list <- inputs_type_lists$metadata_list
-      intensity_patterns_list <- inputs_type_lists$intensity_list
+      required_columns_list <- self$inputs_type_lists$metadata_list
+      intensity_patterns_list <- self$inputs_type_lists$intensity_list
       table_names <- names(required_columns_list)
       
       error_messages <- list()
@@ -566,7 +580,7 @@ QProMS <- R6Class(
           {if (oibs) filter(., `Only identified by site` != "+") else .}
       } else {
         cleaned_data <- data %>% 
-          filter(!gene_names %in% contaminants$contaminant_list) 
+          filter(!gene_names %in% self$contaminants$contaminant_list) 
       }
       self$filtered_data <- cleaned_data
     },
