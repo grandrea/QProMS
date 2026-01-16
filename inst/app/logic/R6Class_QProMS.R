@@ -28,8 +28,8 @@ box::use(
 )
 
 pkg_dir <- system.file(package = "qproms")
-source(file.path(pkg_dir, "app/static/inputs_type_lists.R"))
-source(file.path(pkg_dir, "app/static/contaminants.R"))
+source(file.path(pkg_dir, "app/static/inputs_type_lists.R"), local = TRUE)
+source(file.path(pkg_dir, "app/static/contaminants.R"), local = TRUE)
 
 #' @export
 QProMS <- R6Class(

@@ -48,7 +48,7 @@ suppressPackageStartupMessages(library(reactable))
 
 # Load R6 class directly (we're already in the right directory context)
 pkg_dir <- system.file(package = "qproms")
-source(file.path(pkg_dir, "app/logic/R6Class_QProMS.R"))
+source(file.path(pkg_dir, "app/logic/R6Class_QProMS.R"), local = TRUE)
 
 r6 <- QProMS$new()
 
