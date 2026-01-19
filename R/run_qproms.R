@@ -22,7 +22,7 @@ run_qproms <- function(launch.browser = TRUE, port = NULL, host = "127.0.0.1") {
     "shiny", "rhino", "gargoyle", "box", "shinyalert",
     "trelliscopejs", "heatmaply", "openxlsx", "echarts4r",
     "esquisse", "reactable", "rhandsontable", "rlist", 
-    "rbioapi", "viridis", "quarto", "here"
+    "rbioapi", "viridis", "quarto", "here", "UpSetR"
   )
   
   missing_bioc <- bioc_deps[!bioc_deps %in% rownames(installed.packages())]
