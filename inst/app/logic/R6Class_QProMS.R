@@ -754,7 +754,11 @@ QProMS <- R6Class(
             sample_id,
             into = c("label", "condition", "replicate"),
             sep = "\\|\\|"
+          ) %>%
+          mutate(
+            replicate = as.integer(replicate)
           )
+        
         
         self$imputed_data <- data %>%
           select(-intensity) %>%
