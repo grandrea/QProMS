@@ -724,30 +724,30 @@ QProMS <- R6Class(
         self$is_imp <- TRUE
         set.seed(11)
         
-        # Pivot to wide format for missForest
+        # Create unique sample ID
+        data <- self$normalized_data %>%
+          mutate(sample_id = paste(label, condition, replicate, sep = "||"))
+        
+        # Ensure unique gene_name × sample_id, collapsing duplicates by mean
         wide <- data %>%
-          mutate(sample_id = paste(label, condition, replicate, sep = "||")) %>%
-          select(gene_names, sample_id, intensity) %>%
+          group_by(gene_names, sample_id) %>%
+          summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop") %>%
           pivot_wider(names_from = sample_id, values_from = intensity)
         
+        # Preserve rownames
         rownames(wide) <- wide$gene_names
         wide_mat <- wide %>% select(-gene_names)
         
-        # Columns with at least one non-NA value
-        keep_cols <- colSums(!is.na(wide_mat)) > 0
-        wide_mat_mf <- wide_mat[, keep_cols, drop = FALSE]
-        
-        # Run missForest imputation
-        mf <- missForest::missForest(as.matrix(wide_mat_mf),
+        # Run missForest
+        mf <- missForest::missForest(as.matrix(wide_mat),
                                      verbose = FALSE,
-                                     maxiter = 1, ntree = 20)
+                                     maxiter = 5, ntree = 20)
         
-        # Reconstruct full matrix including all original samples
-        full_mat <- wide_mat
-        full_mat[, keep_cols] <- mf$ximp
+        # Replace only the columns used in missForest
+        wide_mat[] <- mf$ximp
         
         # Convert back to long format
-        imputed_long <- full_mat %>%
+        imputed_long <- wide_mat %>%
           as.data.frame() %>%
           rownames_to_column("gene_names") %>%
           pivot_longer(
@@ -755,59 +755,23 @@ QProMS <- R6Class(
             names_to = "sample_id",
             values_to = "intensity"
           ) %>%
-          separate(
-            sample_id,
-            into = c("label", "condition", "replicate"),
-            sep = "\\|\\|"
-          )
+          separate(sample_id, into = c("label", "condition", "replicate"), sep = "\\|\\|") %>%
+          mutate(replicate = as.integer(replicate))
         
-        # -----------------------------
-        # Preserve original types and factor levels
-        # -----------------------------
-        key_cols <- c("gene_names", "label", "condition", "replicate")
-        orig_classes <- sapply(data[, key_cols], class)
-        orig_levels  <- sapply(data[, key_cols], function(x) if(is.factor(x)) levels(x) else NA)
-        
-        # Coerce to join-safe types
-        data2 <- data %>%
-          mutate(
-            gene_names = as.character(gene_names),
-            label = as.character(label),
-            condition = as.character(condition),
-            replicate = as.integer(replicate)
-          )
-        
-        imputed_long2 <- imputed_long %>%
-          mutate(
-            gene_names = as.character(gene_names),
-            label = as.character(label),
-            condition = as.character(condition),
-            replicate = as.integer(replicate)
-          )
-        
-        # Join imputed intensities back
-        imputed_merged <- data2 %>%
-          select(-intensity) %>%
-          left_join(
-            imputed_long2,
-            by = c("gene_names", "label", "condition", "replicate")
-          )
-        
-        # Restore original column types and factor levels
-        for (col in names(orig_classes)) {
-          if (is.factor(data[[col]])) {
-            imputed_merged[[col]] <- factor(
-              imputed_merged[[col]],
-              levels = orig_levels[[col]]
-            )
-          } else {
-            class(imputed_merged[[col]]) <- orig_classes[[col]]
+        # Restore factor levels for label and condition
+        for (col in c("label", "condition")) {
+          if (col %in% colnames(data)) {
+            imputed_long[[col]] <- factor(imputed_long[[col]], levels = unique(data[[col]]))
           }
         }
         
-        # Assign to self
-        self$imputed_data <- imputed_merged
+        # Join imputed intensities back with original data (preserve other columns)
+        self$imputed_data <- data %>%
+          select(-intensity) %>%
+          left_join(imputed_long, by = c("gene_names", "label", "condition", "replicate")) %>%
+          mutate(imputed = is.na(bin_intensity) | bin_intensity == 0)
       }
+      
       
       
       
