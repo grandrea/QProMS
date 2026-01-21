@@ -178,11 +178,11 @@ ui <- function(id) {
           selectInput(
             inputId = ns("imputation_input"),
             label = "Method",
-            choices = c("Mixed" = "mixed", "Perseus" = "perseus", "None" = "none"),
+            choices = c("Mixed" = "mixed", "Perseus" = "perseus","missForest" = "missforest", "None" = "none"),
             selected = "mixed"
           ),
           conditionalPanel(
-            condition = "input.imputation_input != 'none'",
+            condition = "['mixed','perseus'].includes(input.imputation_input)",
             ns = ns,
             sliderInput(
               inputId = ns("shift_slider"),
