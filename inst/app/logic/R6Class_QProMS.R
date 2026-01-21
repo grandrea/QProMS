@@ -724,7 +724,7 @@ QProMS <- R6Class(
         self$is_imp <- TRUE
         set.seed(11)
         
-        # Pivot to wide matrix
+        # Pivot to wide format for missForest
         wide <- data %>%
           mutate(sample_id = paste(label, condition, replicate, sep = "||")) %>%
           select(gene_names, sample_id, intensity) %>%
@@ -737,16 +737,16 @@ QProMS <- R6Class(
         keep_cols <- colSums(!is.na(wide_mat)) > 0
         wide_mat_mf <- wide_mat[, keep_cols, drop = FALSE]
         
-        # Run missForest
+        # Run missForest imputation
         mf <- missForest::missForest(as.matrix(wide_mat_mf),
                                      verbose = FALSE,
                                      maxiter = 1, ntree = 20)
         
-        # Reconstruct full matrix to preserve all samples
+        # Reconstruct full matrix including all original samples
         full_mat <- wide_mat
         full_mat[, keep_cols] <- mf$ximp
         
-        # Back to long format
+        # Convert back to long format
         imputed_long <- full_mat %>%
           as.data.frame() %>%
           rownames_to_column("gene_names") %>%
@@ -759,7 +759,17 @@ QProMS <- R6Class(
             sample_id,
             into = c("label", "condition", "replicate"),
             sep = "\\|\\|"
-          ) %>%
+          )
+        
+        # -----------------------------
+        # Temporarily coerce columns for join
+        # -----------------------------
+        # Save original classes
+        key_cols <- c("gene_names", "label", "condition", "replicate")
+        orig_classes <- sapply(data[, key_cols], class)
+        
+        # Coerce both data and imputed_long to join-safe types
+        data2 <- data %>%
           mutate(
             gene_names = as.character(gene_names),
             label = as.character(label),
@@ -767,20 +777,35 @@ QProMS <- R6Class(
             replicate = as.integer(replicate)
           )
         
-        # Merge back to preserve all original columns / row order
-        self$imputed_data <- data %>%
+        imputed_long2 <- imputed_long %>%
           mutate(
             gene_names = as.character(gene_names),
             label = as.character(label),
             condition = as.character(condition),
             replicate = as.integer(replicate)
-          ) %>%
+          )
+        
+        # -----------------------------
+        # Join imputed intensities back
+        # -----------------------------
+        imputed_merged <- data2 %>%
           select(-intensity) %>%
           left_join(
-            imputed_long,
+            imputed_long2,
             by = c("gene_names", "label", "condition", "replicate")
           )
+        
+        # -----------------------------
+        # Restore original column types
+        # -----------------------------
+        for (col in names(orig_classes)) {
+          class(imputed_merged[[col]]) <- orig_classes[[col]]
+        }
+        
+        # Assign to self
+        self$imputed_data <- imputed_merged
       }
+      
       
       # -----------------------------
       # No imputation
