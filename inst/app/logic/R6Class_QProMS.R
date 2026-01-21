@@ -719,44 +719,30 @@ QProMS <- R6Class(
       # -----------------------------
       # missForest imputation
       # -----------------------------
-      # -----------------------------
-      # missForest imputation
-      # -----------------------------
       else if (imp_methods == "missforest") {
         
         self$is_imp <- TRUE
         set.seed(11)
         
-        # Create a unique sample identifier
-        data2 <- data %>%
-          mutate(sample_id = paste(label, condition, replicate, sep = "||"))
-        
-        # Aggregate duplicates if any (e.g., multiple rows per gene x sample)
-        data_agg <- data2 %>%
-          group_by(gene_names, sample_id) %>%
-          summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop")
-        
-        # Pivot to wide format
-        wide <- data_agg %>%
+        # Pivot to wide format for missForest
+        wide <- data %>%
+          mutate(sample_id = paste(label, condition, replicate, sep = "||")) %>%
+          select(gene_names, sample_id, intensity) %>%
           pivot_wider(names_from = sample_id, values_from = intensity)
         
-        # Store rownames and prepare matrix
         rownames(wide) <- wide$gene_names
         wide_mat <- wide %>% select(-gene_names)
         
-        # Keep only columns with at least one non-NA
+        # Columns with at least one non-NA value
         keep_cols <- colSums(!is.na(wide_mat)) > 0
         wide_mat_mf <- wide_mat[, keep_cols, drop = FALSE]
         
-        # Run missForest
-        mf <- missForest::missForest(
-          as.matrix(wide_mat_mf),
-          verbose = FALSE,
-          maxiter = 1,
-          ntree = 20
-        )
+        # Run missForest imputation
+        mf <- missForest::missForest(as.matrix(wide_mat_mf),
+                                     verbose = FALSE,
+                                     maxiter = 1, ntree = 20)
         
-        # Fill back imputed values into the full matrix
+        # Reconstruct full matrix including all original samples
         full_mat <- wide_mat
         full_mat[, keep_cols] <- mf$ximp
         
@@ -775,11 +761,15 @@ QProMS <- R6Class(
             sep = "\\|\\|"
           )
         
-        # Restore original column types for joining
+        # -----------------------------
+        # Preserve original types and factor levels
+        # -----------------------------
         key_cols <- c("gene_names", "label", "condition", "replicate")
         orig_classes <- sapply(data[, key_cols], class)
+        orig_levels  <- sapply(data[, key_cols], function(x) if(is.factor(x)) levels(x) else NA)
         
-        imputed_long2 <- imputed_long %>%
+        # Coerce to join-safe types
+        data2 <- data %>%
           mutate(
             gene_names = as.character(gene_names),
             label = as.character(label),
@@ -787,7 +777,7 @@ QProMS <- R6Class(
             replicate = as.integer(replicate)
           )
         
-        data2 <- data %>%
+        imputed_long2 <- imputed_long %>%
           mutate(
             gene_names = as.character(gene_names),
             label = as.character(label),
@@ -803,9 +793,16 @@ QProMS <- R6Class(
             by = c("gene_names", "label", "condition", "replicate")
           )
         
-        # Restore original classes
+        # Restore original column types and factor levels
         for (col in names(orig_classes)) {
-          class(imputed_merged[[col]]) <- orig_classes[[col]]
+          if (is.factor(data[[col]])) {
+            imputed_merged[[col]] <- factor(
+              imputed_merged[[col]],
+              levels = orig_levels[[col]]
+            )
+          } else {
+            class(imputed_merged[[col]]) <- orig_classes[[col]]
+          }
         }
         
         # Assign to self
