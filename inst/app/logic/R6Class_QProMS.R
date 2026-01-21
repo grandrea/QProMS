@@ -719,30 +719,44 @@ QProMS <- R6Class(
       # -----------------------------
       # missForest imputation
       # -----------------------------
+      # -----------------------------
+      # missForest imputation
+      # -----------------------------
       else if (imp_methods == "missforest") {
         
         self$is_imp <- TRUE
         set.seed(11)
         
-        # Pivot to wide format for missForest
-        wide <- data %>%
-          mutate(sample_id = paste(label, condition, replicate, sep = "||")) %>%
-          select(gene_names, sample_id, intensity) %>%
+        # Create a unique sample identifier
+        data2 <- data %>%
+          mutate(sample_id = paste(label, condition, replicate, sep = "||"))
+        
+        # Aggregate duplicates if any (e.g., multiple rows per gene x sample)
+        data_agg <- data2 %>%
+          group_by(gene_names, sample_id) %>%
+          summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop")
+        
+        # Pivot to wide format
+        wide <- data_agg %>%
           pivot_wider(names_from = sample_id, values_from = intensity)
         
+        # Store rownames and prepare matrix
         rownames(wide) <- wide$gene_names
         wide_mat <- wide %>% select(-gene_names)
         
-        # Columns with at least one non-NA value
+        # Keep only columns with at least one non-NA
         keep_cols <- colSums(!is.na(wide_mat)) > 0
         wide_mat_mf <- wide_mat[, keep_cols, drop = FALSE]
         
-        # Run missForest imputation
-        mf <- missForest::missForest(as.matrix(wide_mat_mf),
-                                     verbose = FALSE,
-                                     maxiter = 1, ntree = 20)
+        # Run missForest
+        mf <- missForest::missForest(
+          as.matrix(wide_mat_mf),
+          verbose = FALSE,
+          maxiter = 1,
+          ntree = 20
+        )
         
-        # Reconstruct full matrix including all original samples
+        # Fill back imputed values into the full matrix
         full_mat <- wide_mat
         full_mat[, keep_cols] <- mf$ximp
         
@@ -761,21 +775,9 @@ QProMS <- R6Class(
             sep = "\\|\\|"
           )
         
-        # -----------------------------
-        # Temporarily coerce columns for join
-        # -----------------------------
-        # Save original classes
+        # Restore original column types for joining
         key_cols <- c("gene_names", "label", "condition", "replicate")
         orig_classes <- sapply(data[, key_cols], class)
-        
-        # Coerce both data and imputed_long to join-safe types
-        data2 <- data %>%
-          mutate(
-            gene_names = as.character(gene_names),
-            label = as.character(label),
-            condition = as.character(condition),
-            replicate = as.integer(replicate)
-          )
         
         imputed_long2 <- imputed_long %>%
           mutate(
@@ -785,9 +787,15 @@ QProMS <- R6Class(
             replicate = as.integer(replicate)
           )
         
-        # -----------------------------
+        data2 <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label = as.character(label),
+            condition = as.character(condition),
+            replicate = as.integer(replicate)
+          )
+        
         # Join imputed intensities back
-        # -----------------------------
         imputed_merged <- data2 %>%
           select(-intensity) %>%
           left_join(
@@ -795,9 +803,7 @@ QProMS <- R6Class(
             by = c("gene_names", "label", "condition", "replicate")
           )
         
-        # -----------------------------
-        # Restore original column types
-        # -----------------------------
+        # Restore original classes
         for (col in names(orig_classes)) {
           class(imputed_merged[[col]]) <- orig_classes[[col]]
         }
@@ -805,6 +811,7 @@ QProMS <- R6Class(
         # Assign to self
         self$imputed_data <- imputed_merged
       }
+      
       
       
       # -----------------------------
