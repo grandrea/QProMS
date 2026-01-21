@@ -740,7 +740,7 @@ QProMS <- R6Class(
         ## missForest cannot handle all-NA columns
         wide_mat <- wide_mat[, colSums(!is.na(wide_mat)) > 0, drop = FALSE]
         
-        mf <- missForest::missForest(as.matrix(wide_mat))
+        mf <- missForest::missForest(as.matrix(wide_mat), verbose = FALSE, maxiter = 1, ntree = 20)
         
         imputed_long <- mf$ximp %>%
           as.data.frame() %>%
