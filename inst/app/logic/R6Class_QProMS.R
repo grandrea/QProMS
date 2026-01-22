@@ -72,8 +72,11 @@ QProMS <- R6Class(
     # parameters for imputation #
     imputed_data = NULL,
     imp_methods = "mixed",
+    mar_mnar_thresh = 0.75,
     imp_shift = 1.8,
     imp_scale = 0.3,
+    missforest_ntree = 10,
+    missforest_niter = 1,
     cor_method = "pearson",
     is_mixed = NULL,
     is_imp = FALSE,
@@ -639,7 +642,7 @@ QProMS <- R6Class(
           data_mixed <- data %>%
             rownames_to_column() %>%
             group_by(gene_names, condition) %>%
-            mutate(for_mean_imp = (sum(bin_intensity) / n()) >= 0.75) %>%
+            mutate(for_mean_imp = (sum(bin_intensity) / n()) >= self$mar_mnar_thresh) %>%
             filter(for_mean_imp) %>%
             mutate(random_imp = runif(
               n = 1,
@@ -770,8 +773,8 @@ QProMS <- R6Class(
         mf <- missForest::missForest(
           wide_mat,
           verbose = FALSE,
-          maxiter = 5,
-          ntree = 20
+          maxiter = self$missforest_niter,
+          ntree = self$missforest_ntree
         )
         
         # ---- wide -> long (NO parsing)
