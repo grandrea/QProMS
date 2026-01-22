@@ -438,13 +438,19 @@ QProMS <- R6Class(
         org_info <- org_map[[self$organism]]
         if (is.null(org_info)) return(NULL)
         orgdb     <- org_info$orgdb
-        g_names <- bitr(
-          initial_table$Accession,
-          fromType = "UNIPROT",
-          toType = "SYMBOL",
-          OrgDb = orgdb
-        ) %>%
-          dplyr::rename(Accession = UNIPROT)
+        g_names <- tryCatch({
+          bitr(
+            initial_table$Accession,
+            fromType = "UNIPROT",
+            toType   = "SYMBOL",
+            OrgDb   = orgdb
+          ) %>%
+            dplyr::rename(Accession = UNIPROT)
+        }, error = function(e) {
+          shiny::showNotification("Organism selected non compatible with Uniprot ID.", type = "error")
+          NULL
+        })
+        if (is.null(g_names)) return(NULL)
         gene_col <- "SYMBOL"
         protein_col <- "Accession"
         required_columns <- c(gene_col, inputs_type_lists$metadata_list[[self$input_type]])

@@ -26,9 +26,8 @@ ui <- function(id) {
               "Profile Plot",
               icon("info-circle")
             ),
-            "Select genes in the table to see their Profile Plot or to see their position in the Volcano plot."
+            "Select genes from the adjacent table section to see their profile plot and their position in the volcano plot."
           ),
-          
           trelliscopeOutput(ns("profile_plot_uni"), style = "height: 100%")
         ),
         nav_panel(
@@ -62,7 +61,6 @@ ui <- function(id) {
               "Welch's T-test (Default)" = "welch",
               "Student's t-test" = "student",
               "Moderated t-test" = "limma"
-              # "Wilcoxon test" = "wilcox" # remove beacuse not work properly.
             ), 
             selected = "welch" 
           ),
@@ -77,14 +75,26 @@ ui <- function(id) {
           id = ns("params"),
           numericInput(
             inputId = ns("fc_input"),
-            label = "Fold change",
+            label = tooltip(
+              trigger = list(
+                "Fold change",
+                icon("info-circle")
+              ),
+              "Fold change Cutoff."
+            ),
             value = 1,
             min = 0,
             step = 0.5
           ),
           numericInput(
             inputId = ns("alpha_input"),
-            label = "Alpha",
+            label = tooltip(
+              trigger = list(
+                "Alpha",
+                icon("info-circle")
+              ),
+              "pvalue adjustment Cutoff."
+            ),
             value = 0.05,
             min = 0.01,
             max = 0.05,
@@ -92,7 +102,13 @@ ui <- function(id) {
           ),
           selectInput(
             inputId = ns("truncation_input"),
-            label = "Truncation",
+            label = tooltip(
+              trigger = list(
+                "Truncation",
+                icon("info-circle")
+              ),
+              "Statistical data correction applied to the dataset."
+            ),
             choices = c(
               "BH (Default)" = "BH",
               "Bonferroni" = "bonferroni",
@@ -109,12 +125,24 @@ ui <- function(id) {
           id = ns("v_params"),
           input_switch(
             id = ns("same_y_input"),
-            label = "Share same Y axis",
+            label = tooltip(
+              trigger = list(
+                "Share same Y axis",
+                icon("info-circle")
+              ),
+              "Set the Y axes on the same scale for all the comparisons. Only if multiple comparisons are selected in the Contrast input."
+            ),
             value = TRUE
           ),
           input_switch(
             id = ns("same_x_input"),
-            label = "Share same X axis",
+            label = tooltip(
+              trigger = list(
+                "Share same X axis",
+                icon("info-circle")
+              ),
+              "Set the X axes on the same scale for all the comparisons. Only if multiple comparisons are selected in the Contrast input."
+            ),
             value = FALSE
           )
         )

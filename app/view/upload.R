@@ -96,9 +96,6 @@ server <- function(id, r6, main_session) {
     observe({
       watch("session")
       if(!r6$new_session){
-        nav_remove("upload_container", "Table Check")
-        nav_remove("upload_container", "Experimental Design")
-        nav_remove("upload_container", "Experimental Design Check")
         output$raw_input_table <- renderReactable({r6$table_raw_data()})
       }
     })
@@ -232,7 +229,7 @@ server <- function(id, r6, main_session) {
     })
     
     observeEvent(input$confirm2, {
-      if(!is.null(r6$raw_data)) {
+      if(!is.null(r6$raw_data) & r6$new_session) {
         nav_select("upload_container", "Experimental Design")
         output$exp_design <- renderRHandsontable({
           if(r6$identify_table_status == "success") {
@@ -245,7 +242,7 @@ server <- function(id, r6, main_session) {
       }
     })
     observeEvent(input$verify, {
-      if(!is.null(r6$raw_data)) {
+      if(!is.null(r6$raw_data) & r6$new_session) {
         des <- hot_to_r(input$exp_design) %>% 
           filter(keep) %>% 
           select(-keep)
@@ -305,6 +302,7 @@ server <- function(id, r6, main_session) {
       r6$organism <- input$organism
       r6$protein_rank_target <- r6$expdesign$label[1]
       r6$preprocessing()
+      if(is.null(r6$data)) return(NULL)
       r6$shiny_wrap_workflow()
       trigger("genes")
       nav_select("top_navigation", "Preprocessing", session = main_session)

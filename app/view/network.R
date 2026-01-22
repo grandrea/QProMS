@@ -83,7 +83,7 @@ ui <- function(id) {
                   "Selection",
                   icon("info-circle")
                 ),
-                "This selection is used for generate the network plot. Press 'UPDATE' to validate a new selection."
+                "This selection is used for generate the network plot. Press 'PROCESS' to validate a new selection."
               ),
               choices = c("From top" = "top", "From bottom" = "bot"),
               selected = "top", 
@@ -127,7 +127,13 @@ ui <- function(id) {
           ),
           selectInput(
             inputId = ns("db_source"),
-            label = "Database",
+            label = tooltip(
+              trigger = list(
+                "Database",
+                icon("info-circle")
+              ),
+              "String integrates known and predicted protein-protein interactions (grey links); CORUM focuses on curated, experimentally validated protein complexes (green links)."
+            ),
             choices = c("String" = "string", "Corum" = "corum"),
             selected = "string", 
             multiple = TRUE
@@ -138,7 +144,13 @@ ui <- function(id) {
           id = ns("params"),
           sliderInput(
             inputId = ns("score_thr"),
-            label = "Score threshold",
+            label = tooltip(
+              trigger = list(
+                "Score threshold",
+                icon("info-circle")
+              ),
+              "Cutoff value used in String algorithms to decide if two strings are similar enough or if a match is valid, filtering out low-quality or irrelevant results by setting a minimum acceptable similarity or confidence level."
+            ),
             min = 0,
             max = 0.9,
             value = 0.4,
@@ -171,7 +183,7 @@ ui <- function(id) {
                 "Subset",
                 icon("info-circle")
               ),
-              "If TRUE, display network with only selected nodes."
+              "If selected, create a new network with only selected nodes."
             ),
             value = FALSE
           )

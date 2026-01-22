@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, sliderInput, isolate, updateSelectInput, updateSliderInput, br, actionButton, observeEvent, icon, observe, req, conditionalPanel, reactiveVal, renderPlot, plotOutput],
+  shiny[moduleServer, NS, selectInput, sliderInput, isolate, numericInput, updateSelectInput, updateSliderInput, br, actionButton, observeEvent, icon, observe, req, conditionalPanel, reactiveVal, renderPlot, plotOutput],
   bslib[page_sidebar, input_task_button, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, accordion_panel_remove, tooltip, nav_hide, nav_show],
   echarts4r[echarts4rOutput, renderEcharts4r],
   gargoyle[watch, trigger, init],
@@ -74,7 +74,7 @@ ui <- function(id) {
                 "Method",
                 icon("info-circle")
               ),
-              "This filter remove missing data base on the valid values grouping method selected."
+              "Filter missing data according to the selected valid values grouping method."
             ),
             choices = c("In at least one group" = "alog", "In each group" = "each_grp", "In total" = "total"),
             selected = "alog"
@@ -86,7 +86,7 @@ ui <- function(id) {
                 "Percentage",
                 icon("info-circle")
               ),
-              "Select the percentage of valid values."
+              "Amount of valid valued in the group."
             ),
             min = 0,
             max = 100,
@@ -167,7 +167,13 @@ ui <- function(id) {
           id = ns("normalization"),
           selectInput(
             inputId = ns("normalization_input"),
-            label = "Normalization",
+            label = tooltip(
+              trigger = list(
+                "Normalization",
+                icon("info-circle")
+              ),
+              "VSN normalization: Applies a variance-stabilizing transformation to make intensity values comparable across samples"
+            ),
             choices = c("None", "VSN"),
             selected = "None"
           )
@@ -177,12 +183,18 @@ ui <- function(id) {
           id = ns("imputation"),
           selectInput(
             inputId = ns("imputation_input"),
-            label = "Method",
-            choices = c("Mixed" = "mixed", "Perseus" = "perseus", "None" = "none"),
+            label = tooltip(
+              trigger = list(
+                "Method",
+                icon("info-circle")
+              ),
+              "Mixed replaces missing values with numbers taken from a normal distribution shiften downward relative to the main data intensity distribution; Perseus uses the same imputation as the software; MissForest imputes data using a random forest."
+            ),
+            choices = c("Mixed" = "mixed", "Perseus" = "perseus", "missForest" = "missforest", "None" = "none"),
             selected = "mixed"
           ),
           conditionalPanel(
-            condition = "input.imputation_input != 'none'",
+            condition = "input.imputation_input == 'mixed' || input.imputation_input == 'perseus'",
             ns = ns,
             sliderInput(
               inputId = ns("shift_slider"),
@@ -200,6 +212,51 @@ ui <- function(id) {
               value = 0.3,
               step = 0.1
             )
+          ),
+          conditionalPanel(
+            condition = "input.imputation_input == 'mixed'",
+            ns = ns,
+            sliderInput(
+              inputId = ns("mar_thr"),
+              label = "MAR thresholds",
+              min = 30,
+              max = 100,
+              value = 75,
+              step = 1,
+              post = "%"
+            )
+          ),
+          conditionalPanel(
+            condition = "input.imputation_input == 'missforest'",
+            ns = ns,
+            numericInput(
+              inputId = ns("maxiter"),
+              label = tooltip(
+                trigger = list(
+                  "maxiter",
+                  icon("info-circle")
+                ),
+                "Maximum number of iterations unless the stopping criterion is met earlier."
+              ),
+              value = 10,
+              min = 1,
+              max = 100,
+              step = 1
+            ),
+            numericInput(
+              inputId = ns("ntree"),
+              label = tooltip(
+                trigger = list(
+                  "ntree",
+                  icon("info-circle")
+                ),
+                "Number of trees to grow in each per-variable forest."
+              ),
+              value = 100,
+              min = 1,
+              max = 1000,
+              step = 1
+            ),
           )
         )
       )

@@ -43,8 +43,8 @@ ui <- function(id) {
           selectInput(
             inputId = ns("rank_with"),
             label = "Rank with",
-            choices = c("Fold change" = "fc", "Intensity" = "intensity"),
-            selected = "fc", 
+            choices = c("Intensity" = "intensity", "Fold change" = "fc"),
+            selected = "intensity", 
             width = "auto"
           ),
           conditionalPanel(
@@ -113,7 +113,13 @@ ui <- function(id) {
             ns = ns,
             sliderInput(
               inputId = ns("simplify_thr"),
-              label = "Simplify threshold",
+              label = tooltip(
+                trigger = list(
+                  "Simplify threshold",
+                  icon("info-circle")
+                ),
+                "Group similar GO descriptions into more a comprehensive description. Drag to a small value if you want to simplify more descriptions."
+              ),
               min = 0.1,
               max = 1,
               value = 1,
@@ -122,7 +128,13 @@ ui <- function(id) {
           ),
           numericInput(
             inputId = ns("alpha_input"),
-            label = "Alpha",
+            label = tooltip(
+              trigger = list(
+                "Alpha",
+                icon("info-circle")
+              ),
+              "pvalue adjustment Cutoff."
+            ),
             value = 0.05,
             min = 0.01,
             max = 0.05,
@@ -146,7 +158,13 @@ ui <- function(id) {
           ),
           selectInput(
             inputId = ns("truncation_input"),
-            label = "Truncation",
+            label = tooltip(
+              trigger = list(
+                "Truncation",
+                icon("info-circle")
+              ),
+              "Statistical data correction applied to the dataset."
+            ),
             choices = c(
               "BH (Default)" = "BH",
               "Bonferroni" = "bonferroni",
