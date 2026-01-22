@@ -719,60 +719,55 @@ QProMS <- R6Class(
       # -----------------------------
       # missForest imputation
       # -----------------------------
+
       else if (imp_methods == "missforest") {
         
         self$is_imp <- TRUE
         set.seed(11)
         
-        # Create unique sample ID
-        data <- self$normalized_data %>%
-          mutate(sample_id = paste(label, condition, replicate, sep = "||"))
+        # Work on normalized_data directly
+        data <- self$normalized_data
         
-        # Ensure unique gene_name × sample_id, collapsing duplicates by mean
+        # ---- long -> wide (keys: gene_names x label)
         wide <- data %>%
-          group_by(gene_names, sample_id) %>%
+          group_by(gene_names, label) %>%
           summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop") %>%
-          pivot_wider(names_from = sample_id, values_from = intensity)
+          pivot_wider(
+            names_from = label,
+            values_from = intensity
+          )
         
-        # Preserve rownames
+        # rownames for missForest
         rownames(wide) <- wide$gene_names
-        wide_mat <- wide %>% select(-gene_names)
+        wide_mat <- as.matrix(wide[, -1])
         
-        # Run missForest
-        mf <- missForest::missForest(as.matrix(wide_mat),
-                                     verbose = FALSE,
-                                     maxiter = 5, ntree = 20)
+        # ---- missForest
+        mf <- missForest::missForest(
+          wide_mat,
+          verbose = FALSE,
+          maxiter = 5,
+          ntree = 20
+        )
         
-        # Replace only the columns used in missForest
-        wide_mat[] <- mf$ximp
-        
-        # Convert back to long format
-        imputed_long <- wide_mat %>%
+        # ---- wide -> long (NO parsing)
+        imputed_long <- mf$ximp %>%
           as.data.frame() %>%
           rownames_to_column("gene_names") %>%
           pivot_longer(
             -gene_names,
-            names_to = "sample_id",
+            names_to = "label",
             values_to = "intensity"
-          ) %>%
-          separate(sample_id, into = c("label", "condition", "replicate"), sep = "\\|\\|") %>%
-          mutate(replicate = as.integer(replicate))
+          )
         
-        # Restore factor levels for label and condition
-        for (col in c("label", "condition")) {
-          if (col %in% colnames(data)) {
-            imputed_long[[col]] <- factor(imputed_long[[col]], levels = unique(data[[col]]))
-          }
-        }
-        
-        # Join imputed intensities back with original data (preserve other columns)
+        # ---- join back (keys unchanged)
         self$imputed_data <- data %>%
           select(-intensity) %>%
-          left_join(imputed_long, by = c("gene_names", "label", "condition", "replicate")) %>%
-          mutate(imputed = is.na(bin_intensity) | bin_intensity == 0)
+          left_join(
+            imputed_long,
+            by = c("gene_names", "label")
+          ) %>%
+          mutate(imputed = bin_intensity == 0)
       }
-      
-      
       
       
       # -----------------------------
