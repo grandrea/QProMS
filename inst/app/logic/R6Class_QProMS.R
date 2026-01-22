@@ -748,7 +748,7 @@ QProMS <- R6Class(
             label      = as.character(label),
             condition  = as.character(condition),
             replicate  = as.character(replicate),
-            row_id     = paste(gene_names, condition, replicate)
+            row_id     = paste(gene_names, condition, replicate, sep = "||")
           ) %>%
           group_by(gene_names, row_id, label) %>%   # ← gene_names restored
           summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop") %>%
@@ -789,7 +789,7 @@ QProMS <- R6Class(
           length(
             intersect(
               unique(imputed_long$row_id),
-              unique(paste(data$gene_names, data$condition, data$replicate))
+              unique(paste(data$gene_names, data$condition, data$replicate, sep = "||"))
             )
           ),
           "\n"
@@ -802,7 +802,7 @@ QProMS <- R6Class(
             label      = as.character(label),
             condition  = as.character(condition),
             replicate  = as.character(replicate),
-            row_id     = paste(gene_names, condition, replicate)
+            row_id     = paste(gene_names, condition, replicate, sep = "||")
           ) %>%
           select(-intensity) %>%
           left_join(imputed_long, by = c("row_id", "label")) %>%
@@ -813,28 +813,22 @@ QProMS <- R6Class(
         
         self$imputed_data <- self$imputed_data %>%
           mutate(
-            label = if (label_class[1] == "factor") {
+            label = if (inherits(data$label, "factor")) {
               factor(label, levels = levels(data$label))
-            } else if (label_class[1] == "character") {
+            } else {
               as.character(label)
-            } else {
-              label
             },
-            condition = if (condition_class[1] == "factor") {
+            condition = if (inherits(data$condition, "factor")) {
               factor(condition, levels = levels(data$condition))
-            } else if (condition_class[1] == "character") {
-              as.character(condition)
             } else {
-              condition
+              as.character(condition)
             },
-            replicate = if (replicate_class[1] == "integer") {
+            replicate = if (inherits(data$replicate, "integer")) {
               as.integer(replicate)
             } else {
               replicate
             }
           )
-        
-        
       }
       
       
