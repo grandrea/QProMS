@@ -725,23 +725,20 @@ QProMS <- R6Class(
         
         data <- self$normalized_data
         
-        
         label_class     <- class(data$label)
         condition_class <- class(data$condition)
         replicate_class <- class(data$replicate)
         
         stopifnot(
           !anyDuplicated(
-            paste(data$gene_names, data$condition, data$replicate)
+            paste(data$gene_names, data$condition, data$replicate, sep = "||")
           )
         )
         
         self$is_imp <- TRUE
         set.seed(11)
         
-        # Work on normalized_data directly
-        
-        # ---- long -> wide (keys: gene_names x label)
+        # ---- long -> wide (rows: gene_names x condition x replicate; cols: label)
         wide <- data %>%
           mutate(
             gene_names = as.character(gene_names),
@@ -750,18 +747,25 @@ QProMS <- R6Class(
             replicate  = as.character(replicate),
             row_id     = paste(gene_names, condition, replicate, sep = "||")
           ) %>%
-          group_by(gene_names, row_id, label) %>%   # ← gene_names restored
+          group_by(gene_names, row_id, label) %>%
           summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop") %>%
           pivot_wider(
             names_from  = label,
             values_from = intensity
           )
         
+        # ---- IMPORTANT: convert to base data.frame so rownames persist
+        wide_df <- as.data.frame(wide)
         
-        # rownames for missForest
-        rownames(wide) <- wide$row_id
-        wide_mat <- as.matrix(wide[, c(-1, -2)])  # drop gene_names AND row_id
-
+        # rownames for missForest: must be row_id (unique per row)
+        rownames(wide_df) <- wide_df$row_id
+        
+        # numeric matrix for missForest (drop id columns)
+        wide_mat <- as.matrix(wide_df[, setdiff(names(wide_df), c("gene_names", "row_id"))])
+        
+        # optional but very helpful one-liner debug
+        cat("Example wide_mat rownames:", paste(head(rownames(wide_mat)), collapse = ", "), "\n")
+        
         # ---- missForest
         mf <- missForest::missForest(
           wide_mat,
@@ -780,10 +784,8 @@ QProMS <- R6Class(
             values_to = "intensity"
           )
         
-        
         cat("Rows in imputed_long:", nrow(imputed_long), "\n")
         cat("Rows in data:", nrow(data), "\n")
-        
         cat(
           "Row_id overlap:",
           length(
@@ -795,7 +797,7 @@ QProMS <- R6Class(
           "\n"
         )
         
-        
+        # ---- join imputed intensities back (preserve other columns)
         self$imputed_data <- data %>%
           mutate(
             gene_names = as.character(gene_names),
@@ -809,8 +811,7 @@ QProMS <- R6Class(
           select(-row_id) %>%
           mutate(imputed = bin_intensity == 0)
         
-        
-        
+        # ---- restore original types (so downstream code matches Perseus/Mixed output)
         self$imputed_data <- self$imputed_data %>%
           mutate(
             label = if (inherits(data$label, "factor")) {
@@ -830,7 +831,6 @@ QProMS <- R6Class(
             }
           )
       }
-      
       
       
       # -----------------------------
