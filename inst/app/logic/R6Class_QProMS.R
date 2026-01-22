@@ -777,6 +777,8 @@ QProMS <- R6Class(
         self$is_imp <- FALSE
       }
       
+      stopifnot(nrow(self$imputed_data) == nrow(self$normalized_data))
+      stopifnot(!all(is.na(self$imputed_data$intensity))) 
     },
     
     rank_protein = function(target, by_condition, selection, n_perc) {
