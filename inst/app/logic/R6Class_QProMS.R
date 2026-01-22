@@ -617,6 +617,7 @@ QProMS <- R6Class(
         self$normalized_data <- normalized_data
       }
     },
+
     imputation = function(imp_methods, shift, scale, unique_visual = FALSE) {
       
       # Work on a local copy of normalized_data
@@ -722,6 +723,12 @@ QProMS <- R6Class(
 
       else if (imp_methods == "missforest") {
         
+        stopifnot(
+          !anyDuplicated(
+            paste(data$gene_names, data$label, data$condition, data$replicate)
+          )
+        )
+        
         self$is_imp <- TRUE
         set.seed(11)
         
@@ -730,12 +737,14 @@ QProMS <- R6Class(
         
         # ---- long -> wide (keys: gene_names x label)
         wide <- data %>%
-          group_by(gene_names, label) %>%
+          mutate(row_id = paste(gene_names, label, condition, replicate, sep = "||")) %>%
+          group_by(row_id, label) %>%
           summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop") %>%
           pivot_wider(
             names_from = label,
             values_from = intensity
           )
+        
         
         # rownames for missForest
         rownames(wide) <- wide$gene_names
@@ -752,23 +761,21 @@ QProMS <- R6Class(
         # ---- wide -> long (NO parsing)
         imputed_long <- mf$ximp %>%
           as.data.frame() %>%
-          rownames_to_column("gene_names") %>%
+          rownames_to_column("row_id") %>%
           pivot_longer(
-            -gene_names,
+            -row_id,
             names_to = "label",
             values_to = "intensity"
           )
         
-        # ---- join back (keys unchanged)
         self$imputed_data <- data %>%
+          mutate(row_id = paste(gene_names, label, condition, replicate, sep = "||")) %>%
           select(-intensity) %>%
-          left_join(
-            imputed_long,
-            by = c("gene_names", "label")
-          ) %>%
+          left_join(imputed_long, by = c("row_id", "label")) %>%
+          select(-row_id) %>%
           mutate(imputed = bin_intensity == 0)
+        
       }
-      
       
       # -----------------------------
       # No imputation
