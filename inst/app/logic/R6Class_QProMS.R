@@ -72,8 +72,11 @@ QProMS <- R6Class(
     # parameters for imputation #
     imputed_data = NULL,
     imp_methods = "mixed",
+    mar_mnar_thresh = 0.75,
     imp_shift = 1.8,
     imp_scale = 0.3,
+    missforest_ntree = 10,
+    missforest_niter = 1,
     cor_method = "pearson",
     is_mixed = NULL,
     is_imp = FALSE,
@@ -617,38 +620,41 @@ QProMS <- R6Class(
         self$normalized_data <- normalized_data
       }
     },
+
     imputation = function(imp_methods, shift, scale, unique_visual = FALSE) {
       
-      data <- self$normalized_data %>% 
+      # Work on a local copy of normalized_data
+      data <- self$normalized_data %>%
         mutate(imputed = if_else(bin_intensity == 1, FALSE, TRUE))
       
-      if(imp_methods == "mixed"){
-        self$is_mixed <- TRUE
-      }else{
-        self$is_mixed <- FALSE
-      }
-      
-      if(imp_methods == "mixed" | imp_methods == "perseus"){
-        self$is_imp <- TRUE
+      # -----------------------------
+      # Perseus / Mixed imputation
+      # -----------------------------
+      if (imp_methods %in% c("mixed", "perseus")) {
         
-        if(self$is_mixed){
+        # Set mixed flag as in original logic
+        self$is_mixed <- imp_methods == "mixed"
+        self$is_imp   <- TRUE
+        
+        # Mixed-specific imputation
+        if (self$is_mixed) {
           set.seed(11)
           data_mixed <- data %>%
-            rownames_to_column() %>% 
+            rownames_to_column() %>%
             group_by(gene_names, condition) %>%
-            mutate(for_mean_imp = if_else((sum(bin_intensity) / n()) >= 0.75, TRUE, FALSE)) %>%
-            filter(for_mean_imp) %>% 
+            mutate(for_mean_imp = (sum(bin_intensity) / n()) >= self$mar_mnar_thresh) %>%
+            filter(for_mean_imp) %>%
             mutate(random_imp = runif(
               n = 1,
               min = min(intensity, na.rm = TRUE),
               max = max(intensity, na.rm = TRUE)
-            )) %>% 
-            ungroup() %>% 
+            )) %>%
+            ungroup() %>%
             select(rowname, for_mean_imp, random_imp)
           
-          data_mixed_final <- data %>% 
-            rownames_to_column() %>% 
-            left_join(data_mixed, by = "rowname") %>% 
+          data <- data %>%
+            rownames_to_column() %>%
+            left_join(data_mixed, by = "rowname") %>%
             mutate(
               imp_intensity = case_when(
                 bin_intensity == 0 & for_mean_imp ~ random_imp,
@@ -657,60 +663,191 @@ QProMS <- R6Class(
             ) %>%
             mutate(intensity = imp_intensity) %>%
             select(-c(rowname, for_mean_imp, random_imp, imp_intensity))
-          
-          data <- data_mixed_final
         }
         
-        if(unique_visual){
+        # Unique visual adjustments
+        if (unique_visual) {
           data_unique <- data %>%
             group_by(gene_names, condition) %>%
-            mutate(miss_val = n() - sum(bin_intensity)) %>%
-            mutate(n_size = n()) %>%
+            mutate(miss_val = n() - sum(bin_intensity),
+                   n_size = n()) %>%
             ungroup() %>%
             group_by(gene_names) %>%
             filter(any(miss_val <= 0)) %>%
             ungroup() %>%
-            filter(miss_val == n_size) %>% 
-            mutate(intensity = min(data$intensity, na.rm = TRUE), unique = TRUE) %>% 
-            select(-c(bin_intensity, miss_val, n_size)) %>% 
-            rename(unique_intensity = intensity) 
+            filter(miss_val == n_size) %>%
+            mutate(intensity = min(data$intensity, na.rm = TRUE),
+                   unique = TRUE) %>%
+            select(-c(bin_intensity, miss_val, n_size)) %>%
+            rename(unique_intensity = intensity)
           
-          data <- data %>% 
-            left_join(data_unique, by = c("gene_names", "label", "condition", "replicate")) %>% 
-            mutate(unique = if_else(is.na(unique), FALSE, unique)) %>% 
-            mutate(intensity = if_else(unique, unique_intensity, intensity)) %>% 
-            mutate(bin_intensity = if_else(unique, 1, bin_intensity)) %>% 
-            select(-c(unique_intensity, unique)) 
+          data <- data %>%
+            left_join(
+              data_unique,
+              by = c("gene_names", "label", "condition", "replicate")
+            ) %>%
+            mutate(
+              unique = if_else(is.na(unique), FALSE, unique),
+              intensity = if_else(unique, unique_intensity, intensity),
+              bin_intensity = if_else(unique, 1, bin_intensity)
+            ) %>%
+            select(-c(unique_intensity, unique))
         }
-        ## this funcion perform classical Perseus imputation
-        ## sice use random nomral distibution i will set a set.seed()
-        set.seed(11)
         
-        imputed_data <- data %>%
+        # Perseus-style random normal imputation
+        set.seed(11)
+        self$imputed_data <- data %>%
           group_by(label) %>%
-          # Define statistic to generate the random distribution relative to sample
           mutate(
             mean = mean(intensity, na.rm = TRUE),
-            sd = sd(intensity, na.rm = TRUE),
-            n = sum(!is.na(intensity)),
+            sd   = sd(intensity, na.rm = TRUE),
+            n    = sum(!is.na(intensity)),
             total = nrow(data) - n
           ) %>%
           ungroup() %>%
-          # Impute missing values by random draws from a distribution
-          # which is left-shifted by parameter 'shift' * sd and scaled by parameter 'scale' * sd.
-          mutate(imp_intensity = case_when(
-            is.na(intensity) ~ rnorm(total, mean = (mean - shift * sd), sd = sd * scale),
-            TRUE ~ intensity
-          )) %>%
+          mutate(
+            sd = ifelse(sd == 0, 1e-6, sd), # avoid zero-variance columns
+            imp_intensity = case_when(
+              is.na(intensity) ~ rnorm(
+                total,
+                mean = mean - shift * sd,
+                sd   = sd * scale
+              ),
+              TRUE ~ intensity
+            )
+          ) %>%
           mutate(intensity = imp_intensity) %>%
           select(-c(mean, sd, n, total, imp_intensity))
+      }
+      
+      # -----------------------------
+      # missForest imputation
+      # -----------------------------
+
+      else if (imp_methods == "missforest") {
         
-        self$imputed_data <- imputed_data
+        data <- self$normalized_data
         
-      }else{
+        label_class     <- class(data$label)
+        condition_class <- class(data$condition)
+        replicate_class <- class(data$replicate)
+        
+        stopifnot(
+          !anyDuplicated(
+            paste(data$gene_names, data$condition, data$replicate, sep = "||")
+          )
+        )
+        
+        self$is_imp <- TRUE
+        set.seed(11)
+        
+        # ---- long -> wide (rows: gene_names x condition x replicate; cols: label)
+        wide <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label),
+            condition  = as.character(condition),
+            replicate  = as.character(replicate),
+            row_id     = paste(gene_names, condition, replicate, sep = "||")
+          ) %>%
+          group_by(gene_names, row_id, label) %>%
+          summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop") %>%
+          pivot_wider(
+            names_from  = label,
+            values_from = intensity
+          )
+        
+        # ---- IMPORTANT: convert to base data.frame so rownames persist
+        wide_df <- as.data.frame(wide)
+        
+        # rownames for missForest: must be row_id (unique per row)
+        rownames(wide_df) <- wide_df$row_id
+        
+        # numeric matrix for missForest (drop id columns)
+        wide_mat <- as.matrix(wide_df[, setdiff(names(wide_df), c("gene_names", "row_id"))])
+        
+        # optional but very helpful one-liner debug
+        cat("Example wide_mat rownames:", paste(head(rownames(wide_mat)), collapse = ", "), "\n")
+        
+        # ---- missForest
+        mf <- missForest::missForest(
+          wide_mat,
+          verbose = FALSE,
+          maxiter = self$missforest_niter,
+          ntree = self$missforest_ntree
+        )
+        
+        # ---- wide -> long (NO parsing)
+        imputed_long <- mf$ximp %>%
+          as.data.frame() %>%
+          rownames_to_column("row_id") %>%
+          pivot_longer(
+            -row_id,
+            names_to = "label",
+            values_to = "intensity"
+          )
+        
+        cat("Rows in imputed_long:", nrow(imputed_long), "\n")
+        cat("Rows in data:", nrow(data), "\n")
+        cat(
+          "Row_id overlap:",
+          length(
+            intersect(
+              unique(imputed_long$row_id),
+              unique(paste(data$gene_names, data$condition, data$replicate, sep = "||"))
+            )
+          ),
+          "\n"
+        )
+        
+        # ---- join imputed intensities back (preserve other columns)
+        self$imputed_data <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label),
+            condition  = as.character(condition),
+            replicate  = as.character(replicate),
+            row_id     = paste(gene_names, condition, replicate, sep = "||")
+          ) %>%
+          select(-intensity) %>%
+          left_join(imputed_long, by = c("row_id", "label")) %>%
+          select(-row_id) %>%
+          mutate(imputed = bin_intensity == 0)
+        
+        # ---- restore original types (so downstream code matches Perseus/Mixed output)
+        self$imputed_data <- self$imputed_data %>%
+          mutate(
+            label = if (inherits(data$label, "factor")) {
+              factor(label, levels = levels(data$label))
+            } else {
+              as.character(label)
+            },
+            condition = if (inherits(data$condition, "factor")) {
+              factor(condition, levels = levels(data$condition))
+            } else {
+              as.character(condition)
+            },
+            replicate = if (inherits(data$replicate, "integer")) {
+              as.integer(replicate)
+            } else {
+              replicate
+            }
+          )
+      }
+      
+      
+      # -----------------------------
+      # No imputation
+      # -----------------------------
+      else {
         self$is_imp <- FALSE
       }
+  
+      
+      stopifnot(nrow(self$imputed_data) == nrow(self$normalized_data))
+      stopifnot(!all(is.na(self$imputed_data$intensity))) 
     },
+    
     rank_protein = function(target, by_condition, selection, n_perc) {
       if(by_condition) {
         data <- self$imputed_data %>%

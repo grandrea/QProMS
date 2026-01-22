@@ -178,12 +178,20 @@ ui <- function(id) {
           selectInput(
             inputId = ns("imputation_input"),
             label = "Method",
-            choices = c("Mixed" = "mixed", "Perseus" = "perseus", "None" = "none"),
+            choices = c(
+              "Mixed" = "mixed",
+              "Perseus" = "perseus",
+              "missForest" = "missforest",
+              "None" = "none"
+            ),
             selected = "mixed"
           ),
+          
+          # Mixed / Perseus options
           conditionalPanel(
-            condition = "input.imputation_input != 'none'",
+            condition = "['mixed','perseus'].includes(input.imputation_input)",
             ns = ns,
+            
             sliderInput(
               inputId = ns("shift_slider"),
               label = "Down shift",
@@ -199,6 +207,37 @@ ui <- function(id) {
               max = 0.5,
               value = 0.3,
               step = 0.1
+            ),
+            sliderInput(
+              inputId = ns("mar_mnar_thresh"),
+              label = "MAR/MNAR threshold",
+              min = 0,
+              max = 1,
+              value = 0.75,
+              step = 0.05
+            )
+          ),
+          
+          # missForest options
+          conditionalPanel(
+            condition = "input.imputation_input == 'missforest'",
+            ns = ns,
+            
+            sliderInput(
+              inputId = ns("missforest_ntree"),
+              label = "Number of trees (ntree)",
+              min = 10,
+              max = 50,
+              value = 10,
+              step = 10
+            ),
+            sliderInput(
+              inputId = ns("missforest_niter"),
+              label = "Number of iterations (maxiter)",
+              min = 1,
+              max = 5,
+              value = 1,
+              step = 1
             )
           )
         )
