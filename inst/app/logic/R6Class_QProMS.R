@@ -723,6 +723,32 @@ QProMS <- R6Class(
 
       else if (imp_methods == "missforest") {
         
+        label_class     <- class(data$label)
+        condition_class <- class(data$condition)
+        replicate_class <- class(data$replicate)
+        
+        cat("Rows in imputed_long:", nrow(imputed_long), "\n")
+        cat("Rows in data:", nrow(data), "\n")
+        
+        cat(
+          "Row_id overlap:",
+          length(
+            intersect(
+              unique(imputed_long$row_id),
+              unique(
+                paste(
+                  data$gene_names,
+                  data$label,
+                  data$condition,
+                  data$replicate,
+                  sep = "||"
+                )
+              )
+            )
+          ),
+          "\n"
+          )
+        
         stopifnot(
           !anyDuplicated(
             paste(data$gene_names, data$label, data$condition, data$replicate)
@@ -737,6 +763,13 @@ QProMS <- R6Class(
         
         # ---- long -> wide (keys: gene_names x label)
         wide <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label),
+            condition  = as.character(condition),
+            replicate  = as.character(replicate),   # ← THIS IS CRITICAL
+            row_id     = paste(gene_names, label, condition, replicate, sep = "||")
+          ) %>%
           mutate(row_id = paste(gene_names, label, condition, replicate, sep = "||")) %>%
           group_by(row_id, label) %>%
           summarise(intensity = mean(intensity, na.rm = TRUE), .groups = "drop") %>%
@@ -768,7 +801,30 @@ QProMS <- R6Class(
             values_to = "intensity"
           )
         
+        self$imputed_data <- self$imputed_data %>%
+          mutate(
+            label = if (label_class[1] == "factor") {
+              factor(label, levels = levels(data$label))
+            } else {
+              as(label, label_class[1])
+            },
+            condition = if (condition_class[1] == "factor") {
+              factor(condition, levels = levels(data$condition))
+            } else {
+              as(condition, condition_class[1])
+            },
+            replicate = as(replicate, replicate_class[1])
+          )
+        
+        
         self$imputed_data <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label),
+            condition  = as.character(condition),
+            replicate  = as.character(replicate),   # ← THIS IS CRITICAL
+            row_id     = paste(gene_names, label, condition, replicate, sep = "||")
+          ) %>%
           mutate(row_id = paste(gene_names, label, condition, replicate, sep = "||")) %>%
           select(-intensity) %>%
           left_join(imputed_long, by = c("row_id", "label")) %>%
