@@ -783,6 +783,27 @@ QProMS <- R6Class(
       else {
         self$is_imp <- FALSE
       }
+      cat("Rows in imputed_long:", nrow(imputed_long), "\n")
+      cat("Rows in data:", nrow(data), "\n")
+      
+      cat(
+        "Row_id overlap:",
+        length(
+          intersect(
+            unique(imputed_long$row_id),
+            unique(
+              paste(
+                data$gene_names,
+                data$label,
+                data$condition,
+                data$replicate,
+                sep = "||"
+              )
+            )
+          )
+        ),
+        "\n"
+      )
       
       stopifnot(nrow(self$imputed_data) == nrow(self$normalized_data))
       stopifnot(!all(is.na(self$imputed_data$intensity))) 
