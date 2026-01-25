@@ -55,7 +55,8 @@ ui <- function(id) {
     nav_panel(title = "ORA", ora$ui(ns("ora"))),
     nav_panel(title = "GSEA", gsea$ui(ns("gsea"))),
     nav_spacer(),
-    nav_panel(title = "", value = "Save Results", icon = icon("download"), download$ui(ns("download"))),
+    nav_panel(title = "Export", value = "Save Results", download$ui(ns("download"))),
+    nav_item(tags$a(href = "https://github.com/ieoresearch/QProMS", target = "_blank", icon("github"))),
     nav_panel(title = "", value = "Settings", icon = icon("gear"), settings$ui(ns("settings"))),
     nav_panel(title = "", value = "Help", icon = icon("question"), help$ui(ns("help")))
   )
