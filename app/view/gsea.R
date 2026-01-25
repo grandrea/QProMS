@@ -24,7 +24,13 @@ ui <- function(id) {
           reactableOutput(ns("table"))
         ),
         nav_panel(
-          "GSEA plot",
+          title = tooltip(
+            trigger = list(
+              "GSEA plot",
+              icon("info-circle")
+            ),
+            "Running ES: cumulative enrichment score along the ranked gene list; vertical bars mark gene set hits, bottom panel shows the ranking metric. Leading edge: genes up to the ES peak driving enrichment (NES > 0 top, NES < 0 bottom)."
+          ),
           plotOutput(ns("gseaplot"))
         )
       )
@@ -227,7 +233,7 @@ server <- function(id, r6, main_session) {
       } else {
         updateSelectInput(
           inputId = "rank_with",
-          choices = c("Fold change" = "fc", "Intensity" = "intensity"),
+          choices = c("Intensity" = "intensity", "Fold change" = "fc"),
           selected = "intensity"
         )
       }

@@ -200,7 +200,7 @@ server <- function(id, r6, main_session) {
           tags$li("Gene and Protein ID columns are mandatory")
         ),
         "DIA-NN" = tags$ul(
-          tags$li("Columns containing .mzML are used to identify samples"),
+          tags$li("Columns containing .mzML and .raw are used to identify samples"),
           tags$li("Exporting report.tsv is recommended")
         ),
         "Spectronaut" = tags$ul(

@@ -83,7 +83,7 @@ ui <- function(id) {
                   "Selection",
                   icon("info-circle")
                 ),
-                "This selection is used for generate the network plot. Press 'PROCESS' to validate a new selection."
+                "This selection is used to generate the network plot. Press 'PROCESS' to validate a new selection."
               ),
               choices = c("From top" = "top", "From bottom" = "bot"),
               selected = "top", 

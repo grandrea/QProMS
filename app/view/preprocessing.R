@@ -183,13 +183,7 @@ ui <- function(id) {
           id = ns("imputation"),
           selectInput(
             inputId = ns("imputation_input"),
-            label = tooltip(
-              trigger = list(
-                "Method",
-                icon("info-circle")
-              ),
-              "Mixed replaces missing values with numbers taken from a normal distribution shiften downward relative to the main data intensity distribution; Perseus uses the same imputation as the software; MissForest imputes data using a random forest."
-            ),
+            label = "Method",
             choices = c("Mixed" = "mixed", "Perseus" = "perseus", "missForest" = "missforest", "None" = "none"),
             selected = "mixed"
           ),
@@ -217,13 +211,12 @@ ui <- function(id) {
             condition = "input.imputation_input == 'mixed'",
             ns = ns,
             sliderInput(
-              inputId = ns("mar_thr"),
-              label = "MAR thresholds",
-              min = 30,
-              max = 100,
-              value = 75,
-              step = 1,
-              post = "%"
+              inputId = ns("mar_mnar_thr"),
+              label = "MAR/MNAR threshold",
+              min = 0.25,
+              max = 1,
+              value = 0.75,
+              step = 0.05
             )
           ),
           conditionalPanel(
@@ -233,29 +226,29 @@ ui <- function(id) {
               inputId = ns("maxiter"),
               label = tooltip(
                 trigger = list(
-                  "maxiter",
+                  "Number of iterations",
                   icon("info-circle")
                 ),
-                "Maximum number of iterations unless the stopping criterion is met earlier."
+                "Maximum number of iterations unless the stopping criterion is met earlier (maxiter)."
               ),
-              value = 10,
               min = 1,
-              max = 100,
+              max = 5,
+              value = 1,
               step = 1
             ),
             numericInput(
               inputId = ns("ntree"),
               label = tooltip(
                 trigger = list(
-                  "ntree",
+                  "Number of trees",
                   icon("info-circle")
                 ),
-                "Number of trees to grow in each per-variable forest."
+                "Number of trees to grow in each per-variable forest (ntree)."
               ),
-              value = 100,
-              min = 1,
-              max = 1000,
-              step = 1
+              min = 10,
+              max = 50,
+              value = 10,
+              step = 10
             ),
           )
         )
@@ -317,6 +310,9 @@ server <- function(id, r6) {
       r6$imp_methods <- input$imputation_input
       r6$imp_shift <- input$shift_slider
       r6$imp_scale <- input$scale_slider
+      r6$mar_mnar_thresh <- input$mar_mnar_thr
+      r6$missforest_ntree <- input$ntree
+      r6$missforest_niter <- input$maxiter
       
       if(!is.null(r6$data)) {
         r6$shiny_wrap_workflow()

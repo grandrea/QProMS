@@ -29,7 +29,7 @@ metadata_list <- list(
 intensity_list <- list(
   "FragPipe" = c("MaxLFQ Intensity", "Intensity"),
   "MaxQuant" = c("LFQ intensity ", "iBAQ ", "Intensity "),
-  "DIA-NN" = ".mzML",
+  "DIA-NN" = c(".mzML", ".raw"),
   "Spectronaut" = c("PG.Quantity", "PG.MS1Quantity", "PG.MS2Quantity"),
   "PD" = c("Abundance:", "Abundances \\(Normalized\\):"),
   "AlphaPept" = "_LFQ"

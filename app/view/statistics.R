@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, actionButton, br, selectInput, icon, div, numericInput, observe, updateSelectInput, observeEvent, req, reactive, updateNumericInput],
+  shiny[moduleServer, NS, actionButton, br, selectInput, icon, div, numericInput, observe, updateSelectInput, observeEvent, req, reactive, updateNumericInput, isolate],
   bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, sidebar, tooltip, input_switch, accordion, accordion_panel, input_task_button, update_switch],
   gargoyle[watch, trigger, init],
   reactable[reactableOutput, renderReactable, getReactableState],
@@ -17,7 +17,7 @@ ui <- function(id) {
       navset_card_underline(
         full_screen = TRUE, 
         nav_panel(
-          title = "Volcano Plot",
+          title = "Volcano/MA Plot",
           trelliscopeOutput(ns("volcano_plot"), style = "height: 100%")
         ), 
         nav_panel(
@@ -123,6 +123,12 @@ ui <- function(id) {
         accordion_panel(
           title = "Visual Parameters",
           id = ns("v_params"),
+          selectInput(
+            inputId = ns("plot_type"),
+            label = "Plot type",
+            choices = c("Volcano", "MA"), 
+            selected = "Volcano" 
+          ),
           input_switch(
             id = ns("same_y_input"),
             label = tooltip(
@@ -197,19 +203,35 @@ server <- function(id, r6, main_session) {
       )
       trigger("stat")
       gene_selected <- reactive(getReactableState("table_uni", "selected"))
-      output$volcano_plot <- renderTrelliscope({
-        if(!is.null(r6$stat_table)) {
-          table <- r6$print_stat_table()
-          highlights <- table[gene_selected(),] %>% 
-            pull(gene_names)
-          r6$plot_volcano(
-            r6$contrasts,
-            highlights,
-            r6$univariate_same_x,
-            r6$univariate_same_y
-          )
-        }
-      })
+      if(isolate(input$plot_type) == "Volcano") {
+        output$volcano_plot <- renderTrelliscope({
+          if(!is.null(r6$stat_table)) {
+            table <- r6$print_stat_table()
+            highlights <- table[gene_selected(),] %>% 
+              pull(gene_names)
+            r6$plot_volcano(
+              r6$contrasts,
+              highlights,
+              r6$univariate_same_x,
+              r6$univariate_same_y
+            )
+          }
+        })
+      } else {
+        output$volcano_plot <- renderTrelliscope({
+          if(!is.null(r6$stat_table)) {
+            table <- r6$print_stat_table()
+            highlights <- table[gene_selected(),] %>% 
+              pull(gene_names)
+            r6$plot_ma(
+              r6$contrasts,
+              highlights,
+              r6$univariate_same_x,
+              r6$univariate_same_y
+            )
+          }
+        })
+      }
       output$profile_plot_uni <- renderTrelliscope({
         if(!is.null(r6$stat_table)) {
           table <- r6$print_stat_table()

@@ -2,13 +2,14 @@ box::use(
   R6[R6Class],
   data.table[fread],
   utils[head, combn, modifyList, write.csv, write.table],
-  dplyr[`%>%`, n_distinct, group_by, summarise, n, filter, mutate, ungroup, row_number, select, across, where, all_of, na_if, left_join, rename, if_else, case_when, full_join, relocate, inner_join, distinct, count, everything, pull, arrange, slice_head, slice_tail, last_col, rename_with, ends_with, desc, rename_at, vars, bind_rows, group_map, rowwise, if_all, group_keys, sym, slice_max],
+  dplyr[`%>%`, n_distinct, group_by, summarise, n, filter, mutate, ungroup, row_number, select, across, where, all_of, na_if, left_join, rename, if_else, case_when, full_join, relocate, inner_join, distinct, count, everything, pull, arrange, slice_head, slice_tail, last_col, rename_with, ends_with, desc, rename_at, vars, bind_rows, group_map, rowwise, if_all, group_keys, sym, slice_max, c_across],
   tidyr[drop_na, pivot_longer, pivot_wider, expand_grid, unite, separate_rows, unnest_wider, nest, separate],
   purrr[map, map2, set_names, imap, keep_at, flatten_chr, reduce, map_chr, map_dbl, possibly, list_rbind, pluck, compact, flatten],
   stringr[str_detect, word, str_replace_all, str_extract, str_replace, str_split_1, str_remove, str_which, str_flatten],
   tibble[tibble, as_tibble, column_to_rownames, rownames_to_column, enframe, deframe],
   vsn[vsn2, predict],
   limma[lmFit, eBayes, topTable],
+  missForest[missForest],
   stats[sd, runif, rnorm, prcomp, cor, na.omit, t.test, p.adjust, wilcox.test, model.matrix, aov, hclust, dist, cutree, as.dendrogram, median, qt],
   rbioapi[rba_string_interactions_network],
   OmnipathR[get_complex_genes, import_omnipath_complexes],
@@ -74,8 +75,11 @@ QProMS <- R6Class(
     # parameters for imputation #
     imputed_data = NULL,
     imp_methods = "mixed",
+    mar_mnar_thresh = 0.75,
     imp_shift = 1.8,
     imp_scale = 0.3,
+    missforest_ntree = 10,
+    missforest_niter = 1,
     cor_method = "pearson",
     is_mixed = NULL,
     is_imp = FALSE,
@@ -612,36 +616,38 @@ QProMS <- R6Class(
     },
     imputation = function(imp_methods, shift, scale, unique_visual = FALSE) {
       
-      data <- self$normalized_data %>% 
+      # Work on a local copy of normalized_data
+      data <- self$normalized_data %>%
         mutate(imputed = if_else(bin_intensity == 1, FALSE, TRUE))
       
-      if(imp_methods == "mixed"){
-        self$is_mixed <- TRUE
-      }else{
-        self$is_mixed <- FALSE
-      }
-      
-      if(imp_methods == "mixed" | imp_methods == "perseus"){
-        self$is_imp <- TRUE
+      # -----------------------------
+      # Perseus / Mixed imputation
+      # -----------------------------
+      if (imp_methods %in% c("mixed", "perseus")) {
         
-        if(self$is_mixed){
+        # Set mixed flag as in original logic
+        self$is_mixed <- imp_methods == "mixed"
+        self$is_imp   <- TRUE
+        
+        # Mixed-specific imputation
+        if (self$is_mixed) {
           set.seed(11)
           data_mixed <- data %>%
-            rownames_to_column() %>% 
+            rownames_to_column() %>%
             group_by(gene_names, condition) %>%
-            mutate(for_mean_imp = if_else((sum(bin_intensity) / n()) >= 0.75, TRUE, FALSE)) %>%
-            filter(for_mean_imp) %>% 
+            mutate(for_mean_imp = (sum(bin_intensity) / n()) >= self$mar_mnar_thresh) %>%
+            filter(for_mean_imp) %>%
             mutate(random_imp = runif(
               n = 1,
               min = min(intensity, na.rm = TRUE),
               max = max(intensity, na.rm = TRUE)
-            )) %>% 
-            ungroup() %>% 
+            )) %>%
+            ungroup() %>%
             select(rowname, for_mean_imp, random_imp)
           
-          data_mixed_final <- data %>% 
-            rownames_to_column() %>% 
-            left_join(data_mixed, by = "rowname") %>% 
+          data <- data %>%
+            rownames_to_column() %>%
+            left_join(data_mixed, by = "rowname") %>%
             mutate(
               imp_intensity = case_when(
                 bin_intensity == 0 & for_mean_imp ~ random_imp,
@@ -650,59 +656,162 @@ QProMS <- R6Class(
             ) %>%
             mutate(intensity = imp_intensity) %>%
             select(-c(rowname, for_mean_imp, random_imp, imp_intensity))
-          
-          data <- data_mixed_final
         }
         
-        if(unique_visual){
+        # Unique visual adjustments
+        if (unique_visual) {
           data_unique <- data %>%
             group_by(gene_names, condition) %>%
-            mutate(miss_val = n() - sum(bin_intensity)) %>%
-            mutate(n_size = n()) %>%
+            mutate(miss_val = n() - sum(bin_intensity),
+                   n_size = n()) %>%
             ungroup() %>%
             group_by(gene_names) %>%
             filter(any(miss_val <= 0)) %>%
             ungroup() %>%
-            filter(miss_val == n_size) %>% 
-            mutate(intensity = min(data$intensity, na.rm = TRUE), unique = TRUE) %>% 
-            select(-c(bin_intensity, miss_val, n_size)) %>% 
-            rename(unique_intensity = intensity) 
+            filter(miss_val == n_size) %>%
+            mutate(intensity = min(data$intensity, na.rm = TRUE),
+                   unique = TRUE) %>%
+            select(-c(bin_intensity, miss_val, n_size)) %>%
+            rename(unique_intensity = intensity)
           
-          data <- data %>% 
-            left_join(data_unique, by = c("gene_names", "label", "condition", "replicate")) %>% 
-            mutate(unique = if_else(is.na(unique), FALSE, unique)) %>% 
-            mutate(intensity = if_else(unique, unique_intensity, intensity)) %>% 
-            mutate(bin_intensity = if_else(unique, 1, bin_intensity)) %>% 
-            select(-c(unique_intensity, unique)) 
+          data <- data %>%
+            left_join(
+              data_unique,
+              by = c("gene_names", "label", "condition", "replicate")
+            ) %>%
+            mutate(
+              unique = if_else(is.na(unique), FALSE, unique),
+              intensity = if_else(unique, unique_intensity, intensity),
+              bin_intensity = if_else(unique, 1, bin_intensity)
+            ) %>%
+            select(-c(unique_intensity, unique))
         }
-        ## this funcion perform classical Perseus imputation
-        ## sice use random nomral distibution i will set a set.seed()
-        set.seed(11)
         
-        imputed_data <- data %>%
+        # Perseus-style random normal imputation
+        set.seed(11)
+        self$imputed_data <- data %>%
           group_by(label) %>%
-          # Define statistic to generate the random distribution relative to sample
           mutate(
             mean = mean(intensity, na.rm = TRUE),
-            sd = sd(intensity, na.rm = TRUE),
-            n = sum(!is.na(intensity)),
+            sd   = sd(intensity, na.rm = TRUE),
+            n    = sum(!is.na(intensity)),
             total = nrow(data) - n
           ) %>%
           ungroup() %>%
-          # Impute missing values by random draws from a distribution
-          # which is left-shifted by parameter 'shift' * sd and scaled by parameter 'scale' * sd.
-          mutate(imp_intensity = case_when(
-            is.na(intensity) ~ rnorm(total, mean = (mean - shift * sd), sd = sd * scale),
-            TRUE ~ intensity
-          )) %>%
+          mutate(
+            sd = ifelse(sd == 0, 1e-6, sd), # avoid zero-variance columns
+            imp_intensity = case_when(
+              is.na(intensity) ~ rnorm(
+                total,
+                mean = mean - shift * sd,
+                sd   = sd * scale
+              ),
+              TRUE ~ intensity
+            )
+          ) %>%
           mutate(intensity = imp_intensity) %>%
           select(-c(mean, sd, n, total, imp_intensity))
+      }
+      
+      # -----------------------------
+      # missForest imputation
+      # -----------------------------
+      else if (imp_methods == "missforest") {
         
-        self$imputed_data <- imputed_data
+        data <- self$normalized_data
         
-      }else{
+        label_class     <- class(data$label)
+        condition_class <- class(data$condition)
+        replicate_class <- class(data$replicate)
+        
+        self$is_imp <- TRUE
+        set.seed(11)
+        
+        # ---- long -> wide (rows: gene_names ; cols: label)
+        wide <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label)
+          ) %>%
+          group_by(gene_names, label) %>%
+          summarise(
+            intensity = mean(intensity, na.rm = TRUE),
+            .groups = "drop"
+          ) %>%
+          mutate(intensity = if_else(is.nan(intensity), NA_real_, intensity)) %>%  # important if all-NA
+          pivot_wider(
+            names_from  = label,
+            values_from = intensity
+          )
+        
+        # ---- IMPORTANT: convert to base data.frame so rownames persist
+        wide_df <- as.data.frame(wide)
+        rownames(wide_df) <- wide_df$gene_names
+        
+        # numeric matrix for missForest (drop gene_names)
+        wide_mat <- as.matrix(wide_df[, setdiff(names(wide_df), "gene_names")])
+        
+        # ---- missForest
+        mf <- missForest::missForest(
+          wide_mat,
+          verbose = FALSE,
+          maxiter = self$missforest_niter,
+          ntree   = self$missforest_ntree
+        )
+        
+        # ---- wide -> long (gene_names + label)
+        imputed_long <- mf$ximp %>%
+          as.data.frame() %>%
+          rownames_to_column("gene_names") %>%
+          pivot_longer(
+            -gene_names,
+            names_to  = "label",
+            values_to = "intensity"
+          )
+        
+        # ---- join imputed intensities back (preserve other columns)
+        self$imputed_data <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label)
+          ) %>%
+          select(-intensity) %>%
+          left_join(imputed_long, by = c("gene_names", "label")) %>%
+          mutate(imputed = bin_intensity == 0)
+        
+        # ---- restore original types (match Perseus/Mixed downstream expectations)
+        self$imputed_data <- self$imputed_data %>%
+          mutate(
+            label = if (inherits(data$label, "factor")) {
+              factor(label, levels = levels(data$label))
+            } else {
+              as.character(label)
+            },
+            condition = if (inherits(data$condition, "factor")) {
+              factor(condition, levels = levels(data$condition))
+            } else {
+              as.character(condition)
+            },
+            replicate = if (inherits(data$replicate, "integer")) {
+              as.integer(replicate)
+            } else {
+              replicate
+            }
+          )
+      }
+      
+      
+      
+      # -----------------------------
+      # No imputation
+      # -----------------------------
+      else {
         self$is_imp <- FALSE
       }
+      
+      
+      stopifnot(nrow(self$imputed_data) == nrow(self$normalized_data))
+      stopifnot(!all(is.na(self$imputed_data$intensity))) 
     },
     rank_protein = function(target, by_condition, selection, n_perc) {
       if(by_condition) {
@@ -1520,6 +1629,17 @@ QProMS <- R6Class(
       cond_1 <- conds[1]
       cond_2 <- conds[2]
       
+      mean_abundance_table <- data %>%
+        filter(condition %in% c(cond_1, cond_2)) %>%
+        pivot_wider(id_cols = "gene_names", names_from = "label", values_from = "intensity") %>%
+        rowwise() %>%
+        mutate(mean_abundance = mean(c(
+          mean(c_across(starts_with(cond_1)), na.rm = TRUE), 
+          mean(c_across(starts_with(cond_2)), na.rm = TRUE)
+        ), na.rm = TRUE)) %>% 
+        ungroup() %>%
+        select(gene_names, mean_abundance) 
+      
       if(nrow(filter(self$expdesign, condition == cond_1)) == nrow(filter(self$expdesign, condition == cond_2))) {
         paired_test <- FALSE
       }
@@ -1582,6 +1702,9 @@ QProMS <- R6Class(
           mutate(significant = abs(fold_change) >= fc & p_adj <= alpha) %>%
           rename_with(~paste0(cond_1, "_vs_", cond_2, "_", .), c("p_val", "fold_change", "p_adj", "significant"))
       }
+      stat_data <- stat_data %>% 
+        left_join(mean_abundance_table) %>% 
+        rename_with(~paste0(cond_1, "_vs_", cond_2, "_", .), c("mean_abundance"))
       return(stat_data)
     },
     stat_uni_test = function(test, fc, alpha, p_adj_method, paired_test, test_type) {
@@ -1746,6 +1869,118 @@ QProMS <- R6Class(
       
       return(p)
     },
+    plot_ma_single = function(test, highlights_names, same_x, same_y) {
+      
+      max_y_plot <- self$stat_table %>%
+        select(ends_with("fold_change")) %>%
+        max(na.rm = TRUE) %>%
+        ceiling()
+      
+      min_y_plot <- self$stat_table %>%
+        select(ends_with("fold_change")) %>%
+        min(na.rm = TRUE) %>%
+        floor()
+      
+      min_x_plot <- self$stat_table %>%
+        select(ends_with("mean_abundance")) %>% 
+        min(na.rm = TRUE) %>%
+        floor()
+      
+      max_x_plot <- self$stat_table %>%
+        select(ends_with("mean_abundance")) %>%
+        max(na.rm = TRUE) %>%
+        ceiling()
+      
+      table <- self$stat_table %>%
+        select(gene_names, starts_with(test)) %>%
+        rename_at(vars(matches(test)), ~ str_remove(., paste0(test, "_")))
+      
+      p <- table %>%
+        mutate(color = case_when(
+          fold_change > 0 & significant ~ "#67001f",
+          fold_change < 0 & significant ~ "#053061",
+          TRUE ~ "#e9ecef"
+        )) %>%
+        mutate(
+          fold_change = round(fold_change, 3),
+          mean_abundance = round(mean_abundance, 3)
+        ) %>%
+        e_charts(mean_abundance, renderer = self$plot_format) %>%
+        e_scatter(
+          fold_change,
+          legend = FALSE,
+          bind = gene_names,
+          symbol_size = 5
+        ) %>%
+        e_tooltip(formatter = htmlwidgets::JS("
+      function(params) {
+        return('<strong>' + params.name + '</strong><br />A: ' +
+               params.value[0] + '<br />LFC: ' + params.value[1])
+      }
+    ")) %>%
+        e_add_nested("itemStyle", color) %>%
+        e_toolbox_feature(feature = c("saveAsImage", "dataZoom")) %>%
+        e_x_axis(
+          name = "Mean abundance (A)",
+          nameLocation = "center",
+          axisLabel = list(fontSize = self$plot_font_size),
+          nameTextStyle = list(
+            fontWeight = "bold",
+            fontSize = self$plot_font_size,
+            lineHeight = 4 * self$plot_font_size
+          )
+        ) %>%
+        e_y_axis(
+          name = "Log2 fold change (M)",
+          nameLocation = "center",
+          axisLabel = list(fontSize = self$plot_font_size),
+          nameTextStyle = list(
+            fontWeight = "bold",
+            fontSize = self$plot_font_size,
+            lineHeight = 6 * self$plot_font_size
+          )
+        ) %>%
+        e_grid(containLabel = TRUE) %>%
+        e_group("grp") %>%
+        e_show_loading(text = "Loading...", color = self$primary_color)
+      
+      if (highlights_names != "") {
+        for (name in str_split_1(highlights_names, ":")) {
+          highlights_name <- table %>%
+            filter(gene_names == name) %>%
+            select(
+              xAxis = mean_abundance,
+              yAxis = fold_change,
+              value = gene_names
+            ) %>% as.list()
+          
+          p <- p %>%
+            e_mark_point(
+              data = highlights_name,
+              symbol = "pin",
+              symbolSize = 50,
+              silent = TRUE,
+              label = list(color = "black", fontWeight = "normal", fontSize = 16),
+              itemStyle = list(
+                color = self$primary_color,
+                borderColor = self$primary_color,
+                borderWidth = 0.2
+              )
+            )
+        }
+      }
+      
+      if (same_x) {
+        p <- p %>%
+          e_x_axis(min = min_x_plot - 1, max = max_x_plot + 1)
+      }
+      
+      if (same_y) {
+        p <- p %>%
+          e_y_axis(min = min_y_plot - 1, max = max_y_plot + 1)
+      }
+      return(p)
+    },
     plot_volcano = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
@@ -1768,6 +2003,34 @@ QProMS <- R6Class(
       p <- contrasts_table %>% 
         mutate(plots_panel = panel_lazy(self$plot_volcano_single)) %>% 
         as_trelliscope_df(name = "Volcano Plots",
+                          path = file.path(tr_dir, "test"),
+                          jsonp = FALSE) %>% 
+        set_default_layout(ncol = 1)
+      
+      return(p)
+    },
+    plot_ma = function(tests, gene_names_marked, all_same_x, all_same_y) {
+      
+      if(is.null(self$stat_table)){return(NULL)}
+      ## create the resouce path for trelliscope
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
+      
+      if(is.null(gene_names_marked)){
+        names <- ""
+      } else {
+        names <- paste(gene_names_marked, collapse = ":")
+      }
+      contrasts_table <- tibble(
+        test = tests,
+        highlights_names = names,
+        same_x = all_same_x,
+        same_y = all_same_y
+      )
+      p <- contrasts_table %>% 
+        mutate(plots_panel = panel_lazy(self$plot_ma_single)) %>% 
+        as_trelliscope_df(name = "MA Plots",
                           path = file.path(tr_dir, "test"),
                           jsonp = FALSE) %>% 
         set_default_layout(ncol = 1)

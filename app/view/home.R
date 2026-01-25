@@ -85,9 +85,9 @@ ui <- function(id, primary_col) {
               selectInput(
                 inputId = ns("example"),
                 label = "Datasets",
-                choices = c("proteinGroups_p62.txt"),
+                choices = c("TURBO vs WT" = "turbo", "APEX"),
                 width = "100%",
-                selected = "proteinGroups_p62.txt"
+                selected = "turbo"
               )
             ), 
             nav_spacer()
@@ -193,7 +193,11 @@ server <- function(id, r6, main_session) {
         }
       }
       if(input$start_nav == "Example Dataset") {
-        r6$loading_parameters(input_path = "app/static/QProMS_example_dataset_p62.rds", r6)
+        if(isolate(input$example == "turbo")) {
+          r6$loading_parameters(input_path = "app/static/QProMS_example_turbo_vs_wt.rds", r6)
+        } else {
+          r6$loading_parameters(input_path = "app/static/QProMS_example_dataset_p62.rds", r6)
+        }
         trigger("session", "genes")
         nav_select("top_navigation", "Preprocessing", session = main_session)
         purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))

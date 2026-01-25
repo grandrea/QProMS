@@ -58,6 +58,11 @@ ui <- function(id) {
         accordion_panel(
           title = "Inputs",
           id = ns("define"),
+          selectInput(
+            inputId = ns("test_input"),
+            label = "Test type",
+            choices = "ANOVA",
+          ),
           numericInput(
             inputId = ns("n_cluster_input"),
             label = tooltip(
@@ -90,7 +95,7 @@ ui <- function(id) {
                 "Z-score",
                 icon("info-circle")
               ),
-              "If selected, standardize values using Z-scores. Useful to compare patterns independently of absolute expression levels."
+              "Plot raw abundance or Z-score normailized abundance."
             ),
             value = TRUE
           )
@@ -142,7 +147,7 @@ ui <- function(id) {
                 "Order by name",
                 icon("info-circle")
               ),
-              "If selected, remove the column tree and order column by name."
+              "If selected, remove the column tree and order by column name."
             ),
             value = FALSE
           )
