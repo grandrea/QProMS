@@ -28,7 +28,7 @@ ui <- function(id) {
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
@@ -54,10 +54,10 @@ ui <- function(id) {
               id = ns("by_cond_input"),
               label = tooltip(
                 trigger = list(
-                  "Merge Condition",
+                  "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each condition."
+                "If TRUE, use the Intensity mean of each replicate."
               ),
               value = FALSE
             ),
@@ -115,26 +115,50 @@ ui <- function(id) {
             )
           ),
           selectInput(
-            inputId = ns("ontology_input"),
-            label = "Ontology",
+            inputId = ns("database_input"),
+            label = "Database",
             choices = c(
-              "Biological Processes" = "BP",
-              "Molecular Function" = "MF",
-              "Cellular Components" = "CC"
+              "Gene Ontology" = "GO",
+              "KEGG",
+              "WikiPathways"
             ),
-            selected = "BP"
+            selected = "GO"
+          ),
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            selectInput(
+              inputId = ns("ontology_input"),
+              label = "Ontology",
+              choices = c(
+                "Biological Processes" = "BP",
+                "Molecular Function" = "MF",
+                "Cellular Components" = "CC"
+              ),
+              selected = "BP"
+            )
           )
         ),
         accordion_panel(
           title = "Parameters",
           id = ns("params"),
-          sliderInput(
-            inputId = ns("simplify_thr"),
-            label = "Simplify threshold",
-            min = 0.1,
-            max = 1,
-            value = 1,
-            step = 0.1
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            sliderInput(
+              inputId = ns("simplify_thr"),
+              label = tooltip(
+                trigger = list(
+                  "Simplify threshold",
+                  icon("info-circle")
+                ),
+                "Group similar GO descriptions into more a comprehensive description. Drag to a small value if you want to simplify more descriptions."
+              ),
+              min = 0.1,
+              max = 1,
+              value = 1,
+              step = 0.1
+            )
           ),
           input_switch(
             id = ns("background_input"),
@@ -143,15 +167,43 @@ ui <- function(id) {
           ),
           numericInput(
             inputId = ns("alpha_input"),
-            label = "Alpha",
+            label = tooltip(
+              trigger = list(
+                "Alpha",
+                icon("info-circle")
+              ),
+              "pvalue adjustment Cutoff."
+            ),
             value = 0.05,
             min = 0.01,
             max = 0.05,
             step = 0.01
           ),
+          numericInput(
+            inputId = ns("minGSsize"),
+            label = "min GS size",
+            value = 10,
+            min = 1,
+            max = 100,
+            step = 1
+          ),
+          numericInput(
+            inputId = ns("maxGSsize"),
+            label = "max GS size",
+            value = 500,
+            min = 1,
+            max = 1000,
+            step = 1
+          ),
           selectInput(
             inputId = ns("truncation_input"),
-            label = "Truncation",
+            label = tooltip(
+              trigger = list(
+                "Truncation",
+                icon("info-circle")
+              ),
+              "Statistical data correction applied to the dataset."
+            ),
             choices = c(
               "BH (Default)" = "BH",
               "Bonferroni" = "bonferroni",
@@ -192,7 +244,7 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, r6) {
+server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     observe({
@@ -229,7 +281,7 @@ server <- function(id, r6) {
     
     observe({
       watch("genes")
-      if(!is.null(r6$expdesign)) {
+      if(!is.null(r6$expdesign) & !is.null(input$by_cond_input)) {
         if(input$by_cond_input){
           updateSelectInput(inputId = "target", choices = unique(r6$expdesign$condition))
         } else {
@@ -237,6 +289,24 @@ server <- function(id, r6) {
         }
       }
       updateSelectizeInput(inputId = "gene_names_vector", choices = r6$filtered_gene_vector, server = TRUE)
+      if(!r6$with_statistics) {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c("Rank" = "top_rank", "Manual selection" = "manual"),
+          selected = "top_rank"
+        )
+      } else {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c(
+            "Rank" = "top_rank",
+            "Volcano" = "univariate",
+            "Heatmap" = "multivariate",
+            "Manual selection" = "manual"
+          ), 
+          selected = "top_rank"
+        )
+      }
     })
     
     
@@ -244,16 +314,18 @@ server <- function(id, r6) {
       r6$go_ora_from_statistic <- input$strategy
       r6$go_ora_alpha <- as.double(input$alpha_input)
       r6$go_ora_p_adj_method <- input$truncation_input
+      r6$go_ora_database <- input$database_input
       r6$go_ora_term <- input$ontology_input
       r6$go_ora_top_n <- input$show_category
       r6$go_ora_simplify_thr <- input$simplify_thr
+      r6$go_ora_min_gs_size <- input$minGSsize
+      r6$go_ora_max_gs_size <- input$maxGSsize
       r6$go_ora_background <- input$background_input
       r6$go_ora_plot_arrenge <- input$arrenged
       
       if(r6$go_ora_from_statistic == "univariate") {
         r6$go_ora_focus <- input$volcano_input
       }
-      
       if(r6$go_ora_from_statistic == "top_rank") {
         r6$protein_rank_target <- input$target
         r6$protein_rank_by_cond <- input$by_cond_input
@@ -269,41 +341,39 @@ server <- function(id, r6) {
         }
         r6$go_ora_focus <- r6$protein_rank_target
       }
-      
       if(r6$go_ora_from_statistic == "multivariate") {
         r6$go_ora_focus <- input$clusters_input
       }
-      
       if(r6$go_ora_from_statistic == "manual") {
         r6$go_ora_focus <- input$gene_names_vector
       }
-      
-      r6$go_ora(
-        list_from = r6$go_ora_from_statistic,
-        focus = r6$go_ora_focus,
-        ontology = r6$go_ora_term,
-        simplify_thr = r6$go_ora_simplify_thr,
-        alpha = r6$go_ora_alpha,
-        p_adj_method = r6$go_ora_p_adj_method,
-        background = r6$go_ora_background
-      )
-      r6$print_ora_table(r6$go_ora_plot_arrenge)
-      trigger("plot")
+      tryCatch({
+        r6$go_ora(
+          list_from = r6$go_ora_from_statistic,
+          database = r6$go_ora_database,
+          focus = r6$go_ora_focus,
+          ontology = r6$go_ora_term,
+          simplify_thr = r6$go_ora_simplify_thr,
+          alpha = r6$go_ora_alpha,
+          p_adj_method = r6$go_ora_p_adj_method,
+          min_gs_size = r6$go_ora_min_gs_size,
+          max_gs_size = r6$go_ora_max_gs_size,
+          background = r6$go_ora_background
+        )
+        r6$print_ora_table(r6$go_ora_plot_arrenge)
+      }, error = function(e) {
+        return(NULL)
+      })
+      output$bar_plot <- renderTrelliscope({
+        if(!is.null(r6$ora_result_list)) {
+          focus_plot <- r6$go_ora_focus
+          if(r6$go_ora_from_statistic == "manual") {focus_plot <- "manual"}
+          r6$plot_ora(focus_plot, r6$go_ora_plot_arrenge, r6$go_ora_top_n)
+        }
+      })
+      output$table <- renderReactable({
+        r6$reactable_functional_analysis(r6$ora_table)
+      })
     })
-   
-    output$bar_plot <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$ora_result_list)) {
-        focus_plot <- r6$go_ora_focus
-        if(r6$go_ora_from_statistic == "manual") {focus_plot <- "manual"}
-        r6$plot_ora(focus_plot, r6$go_ora_plot_arrenge, r6$go_ora_top_n)
-      }
-    })
-    
-    output$table <- renderReactable({
-      watch("plot")
-      r6$reactable_functional_analysis(r6$ora_table)
-    })
-    
   })
 }

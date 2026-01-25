@@ -18,7 +18,13 @@ ui <- function(id) {
         id = ns("heatmap_plots_nav"),
         full_screen = TRUE, 
         nav_panel(
-          title = "Heatmap",
+          title = tooltip(
+            trigger = list(
+              "Heatmap",
+              icon("info-circle")
+            ),
+            "The heatmap is generated with Analysis of Variance (ANOVA) test."
+          ),
           plotlyOutput(ns("heatmap_plot"))
         ), 
         nav_panel(
@@ -44,7 +50,7 @@ ui <- function(id) {
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
@@ -52,22 +58,45 @@ ui <- function(id) {
         accordion_panel(
           title = "Inputs",
           id = ns("define"),
+          selectInput(
+            inputId = ns("test_input"),
+            label = "Test type",
+            choices = "ANOVA",
+          ),
           numericInput(
             inputId = ns("n_cluster_input"),
-            label = "N° of clusters",
+            label = tooltip(
+              trigger = list(
+                "N° of clusters",
+                icon("info-circle")
+              ),
+              "The number of clusters the tree should be cut into."
+            ),
             value = 1,
             min = 1,
             step = 1
           ),
           selectInput(
             inputId = ns("clust_method"),
-            label = "HClust method",
+            label = tooltip(
+              trigger = list(
+                "HClust method",
+                icon("info-circle")
+              ),
+              "The agglomeration method to be used."
+            ),
             choices = c("complete (Default)" = "complete", "average", "ward.D2", "mcquitty"),
             selected = "complete"
           ),
           input_switch(
             id = ns("zscore_input"),
-            label = "Z-score",
+            label = tooltip(
+              trigger = list(
+                "Z-score",
+                icon("info-circle")
+              ),
+              "Plot raw abundance or Z-score normailized abundance."
+            ),
             value = TRUE
           )
         ),
@@ -76,7 +105,13 @@ ui <- function(id) {
           id = ns("params"),
           numericInput(
             inputId = ns("alpha_input_milti"),
-            label = "Alpha",
+            label = tooltip(
+              trigger = list(
+                "Alpha",
+                icon("info-circle")
+              ),
+              "pvalue adjustment Cutoff."
+            ),
             value = 0.05,
             min = 0.01,
             max = 0.05,
@@ -84,7 +119,13 @@ ui <- function(id) {
           ),
           selectInput(
             inputId = ns("truncation_input_milti"),
-            label = "Truncation",
+            label = tooltip(
+              trigger = list(
+                "Truncation",
+                icon("info-circle")
+              ),
+              "Statistical data correction applied to the dataset."
+            ),
             choices = c(
               "BH (Default)" = "BH",
               "Bonferroni" = "bonferroni",
@@ -101,7 +142,13 @@ ui <- function(id) {
           id = ns("v_params"),
           input_switch(
             id = ns("order_by_expdesing"),
-            label = "Order by expdesing",
+            label = tooltip(
+              trigger = list(
+                "Order by name",
+                icon("info-circle")
+              ),
+              "If selected, remove the column tree and order by column name."
+            ),
             value = FALSE
           )
         )
@@ -111,7 +158,7 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, r6) {
+server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     init("heatmap")
@@ -138,40 +185,29 @@ server <- function(id, r6) {
         alpha = r6$anova_alpha,
         p_adj_method = r6$anova_p_adj_method
       )
-      
-      trigger("plot", "heatmap")
+      trigger("heatmap")
+      output$heatmap_plot <- renderPlotly({
+        if(!is.null(r6$anova_table)) {
+          r6$plot_heatmap(order_by_expdesing = r6$anova_manual_order)
+        }
+      })
+      output$plot_cluster_profile <- renderTrelliscope({
+        if(!is.null(r6$anova_table)) {
+          r6$plot_cluster_profile()
+        }
+      })
+      output$table_anova <- renderReactable({
+        r6$reactable_interactive(r6$print_anova_table())
+      })
+      gene_selected_anova <- reactive(getReactableState("table_anova", "selected"))
+      output$profile_protein_plot <- renderEcharts4r({
+        if(!is.null(r6$anova_table)) {
+          table <- r6$print_anova_table()
+          highlights <- table[gene_selected_anova(),] %>% 
+            pull(gene_names)
+          r6$plot_protein_profile(highlights) 
+        }
+      })
     })
-    output$heatmap_plot <- renderPlotly({
-      watch("plot")
-      if(!is.null(r6$anova_table)) {
-        r6$plot_heatmap(order_by_expdesing = r6$anova_manual_order)
-      }
-      
-    })
-    output$plot_cluster_profile <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$anova_table)) {
-        r6$plot_cluster_profile()
-      }
-    })
-    
-    output$table_anova <- renderReactable({
-      watch("plot")
-      r6$reactable_interactive(r6$print_anova_table())
-    })
-    
-    gene_selected_anova <- reactive(getReactableState("table_anova", "selected"))
-    
-    output$profile_protein_plot <- renderEcharts4r({
-      watch("plot")
-      if(!is.null(r6$anova_table)) {
-        table <- r6$print_anova_table()
-        highlights <- table[gene_selected_anova(),] %>% 
-          pull(gene_names)
-        r6$plot_protein_profile(highlights) 
-      }
-    })
-    
-    
   })
 }

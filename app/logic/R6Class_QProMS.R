@@ -2,32 +2,30 @@ box::use(
   R6[R6Class],
   data.table[fread],
   utils[head, combn, modifyList, write.csv, write.table],
-  dplyr[`%>%`, n_distinct, group_by, summarise, n, filter, mutate, ungroup, row_number, select, across, where, all_of, na_if, left_join, rename, if_else, case_when, full_join, relocate, inner_join, distinct, count, everything, pull, arrange, slice_head, slice_tail, last_col, rename_with, ends_with, desc, rename_at, vars, bind_rows, group_map, rowwise, if_all, group_keys, sym, slice_max],
+  dplyr[`%>%`, n_distinct, group_by, summarise, n, filter, mutate, ungroup, row_number, select, across, where, all_of, na_if, left_join, rename, if_else, case_when, full_join, relocate, inner_join, distinct, count, everything, pull, arrange, slice_head, slice_tail, last_col, rename_with, ends_with, desc, rename_at, vars, bind_rows, group_map, rowwise, if_all, group_keys, sym, slice_max, c_across],
   tidyr[drop_na, pivot_longer, pivot_wider, expand_grid, unite, separate_rows, unnest_wider, nest, separate],
   purrr[map, map2, set_names, imap, keep_at, flatten_chr, reduce, map_chr, map_dbl, possibly, list_rbind, pluck, compact, flatten],
   stringr[str_detect, word, str_replace_all, str_extract, str_replace, str_split_1, str_remove, str_which, str_flatten],
   tibble[tibble, as_tibble, column_to_rownames, rownames_to_column, enframe, deframe],
   vsn[vsn2, predict],
   limma[lmFit, eBayes, topTable],
+  missForest[missForest],
   stats[sd, runif, rnorm, prcomp, cor, na.omit, t.test, p.adjust, wilcox.test, model.matrix, aov, hclust, dist, cutree, as.dendrogram, median, qt],
   rbioapi[rba_string_interactions_network],
   OmnipathR[get_complex_genes, import_omnipath_complexes],
-  clusterProfiler[enrichGO, simplify, gseGO],
-  org.Hs.eg.db[org.Hs.eg.db],
-  org.Mm.eg.db[org.Mm.eg.db],
-  org.EcK12.eg.db[org.EcK12.eg.db],
-  org.Dm.eg.db[org.Dm.eg.db],
-  org.Sc.sgd.db[org.Sc.sgd.db],
+  clusterProfiler[enrichGO, simplify, gseGO, enrichKEGG, bitr, enrichWP, gseKEGG, gseWP],
+  enrichplot[gseaplot2],
   viridis[viridis],
   htmlwidgets[JS],
   reactable[reactable, colDef],
   rhandsontable[rhandsontable, hot_col],
   trelliscope[panel_lazy, as_trelliscope_df, set_default_layout, add_trelliscope_resource_path],
   heatmaply[heatmaply],
+  UpSetR[upset],
   plotly[plotly_empty, config, layout],
   rlist[list.save, list.load],
   openxlsx[createStyle, createWorkbook, addWorksheet, writeDataTable, setColWidths, addStyle, saveWorkbook],
-  echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords]
+  echarts4r[e_charts, e_bar, e_x_axis, e_y_axis, e_tooltip, e_legend, e_grid, e_color, e_toolbox_feature, e_show_loading, e_boxplot, e_histogram, e_data, e_scatter, e_scatter_3d, e_x_axis_3d, e_y_axis_3d, e_z_axis_3d, e_correlations, e_visual_map, e_title, e_mark_point, e_add_nested, e_group, e_line, e_band2, e_graph, e_graph_nodes, e_graph_edges, e_labels, e_draft, e_flip_coords, e_lm]
 )
 
 box::use(
@@ -56,6 +54,7 @@ QProMS <- R6Class(
     plot_font_size = 16,
     palette = "D",
     color_palette = NULL,
+    primary_color = "#6EC1E4",
     #################################
     # parameters for data wrangling #
     filtered_data = NULL,
@@ -76,8 +75,11 @@ QProMS <- R6Class(
     # parameters for imputation #
     imputed_data = NULL,
     imp_methods = "mixed",
+    mar_mnar_thresh = 0.75,
     imp_shift = 1.8,
     imp_scale = 0.3,
+    missforest_ntree = 10,
+    missforest_niter = 1,
     cor_method = "pearson",
     is_mixed = NULL,
     is_imp = FALSE,
@@ -91,6 +93,8 @@ QProMS <- R6Class(
     protein_rank_list = NULL,
     #############################
     # parameters For Statistics #
+    with_statistics = FALSE,
+    not_test_cond = NULL,
     all_test_combination = NULL, 
     contrasts = NULL,
     univariate = NULL,
@@ -119,11 +123,14 @@ QProMS <- R6Class(
     ora_table = NULL,
     go_ora_from_statistic = NULL,
     go_ora_focus = NULL,
+    go_ora_database = "GO",
     go_ora_alpha = 0.05,
     go_ora_p_adj_method = "BH",
     go_ora_term = "BP",
     go_ora_top_n = 10,
     go_ora_simplify_thr = 1,
+    go_ora_min_gs_size = 10,
+    go_ora_max_gs_size = 500,
     go_ora_background = FALSE,
     go_ora_plot_arrenge = "fold_enrichment",
     #######################
@@ -132,6 +139,7 @@ QProMS <- R6Class(
     go_gsea_by_cond = FALSE,
     gsea_table = NULL,
     go_gsea_rank_with = "fc",
+    go_gsea_database = "GO",
     go_gsea_tested_condition = NULL,
     go_gsea_alpha = 0.05,
     go_gsea_p_adj_method = "BH",
@@ -139,6 +147,8 @@ QProMS <- R6Class(
     go_gsea_focus = NULL,
     go_gsea_top_n = 10,
     go_gsea_simplify_thr = 1,
+    go_gsea_min_gs_size = 10,
+    go_gsea_max_gs_size = 500,
     go_gsea_plot_arrenge = "NES",
     ##########################
     # parameters for network #
@@ -157,12 +167,14 @@ QProMS <- R6Class(
     loading_data = function(input_path, input_name) {
       self$raw_data <- fread(input = input_path) 
     },
-    loading_parameters = function(input_path, self) {
+    loading_parameters = function(input_path, self, print = FALSE) {
       parameters_list <- list.load(input_path)
       imap(parameters_list, ~ {self[[.y]] <- .x})
       invisible(self)
+      if(print){return(parameters_list)}
     },
     table_raw_data = function() {
+      w <- self$raw_data %>% colnames() %>% nchar() %>% max()
       t <- self$raw_data %>% 
         head(15) %>% 
         reactable(
@@ -170,10 +182,12 @@ QProMS <- R6Class(
           striped = TRUE,
           resizable = TRUE,
           compact = TRUE,
+          bordered = TRUE,
           height = "auto",
           paginationType = "simple",
           showPageInfo = FALSE,
-          defaultPageSize = 15
+          defaultPageSize = 15,
+          defaultColDef = colDef(minWidth = w * 10)
         )
       return(t)
     },
@@ -327,17 +341,23 @@ QProMS <- R6Class(
         
         if (groups_with_3_or_more >= 2) {
           results$condition_check <- "success The 'condition' column contains at least 2 groups with at least 3 replicates each."
+          results$condition_check2 <- "info All the statistics pages will be available."
+          self$with_statistics <- TRUE
         } else {
-          results$condition_check <- "danger The 'condition' column does not contains at least 2 groups with at least 3 replicates each."
-          validation_status <- FALSE
+          results$condition_check <- "warning The 'condition' column does not contains at least 2 groups with at least 3 replicates each."
+          results$condition_check2 <- "info The statistics pages will NOT be available."
+          self$with_statistics <- FALSE
         }
         
         groups_with_less_than_3 <- condition_groups %>%
           filter(count < 3)
         
         if (nrow(groups_with_less_than_3) > 0) {
+          self$not_test_cond <- groups_with_less_than_3 %>% pull(condition)
           results$condition_warning <- paste("warning The following groups have less than 3 replicates:", 
                                              paste(groups_with_less_than_3$condition, collapse = ", "))
+        } else {
+          self$not_test_cond <- NULL
         }
       }
       
@@ -383,7 +403,9 @@ QProMS <- R6Class(
     },
     define_tests = function() {
       conditions <- unique(self$expdesign$condition)
-      
+      if(!is.null(self$not_test_cond)) {
+        conditions <- conditions[! conditions %in% self$not_test_cond]
+      }
       self$all_test_combination <-
         expand_grid(cond1 = conditions, cond2 = conditions) %>%
         filter(cond1 != cond2) %>%
@@ -415,6 +437,45 @@ QProMS <- R6Class(
           drop_na(all_of(gene_col)) %>% 
           mutate(!!gene_col := str_extract(.data[[gene_col]], "[^;]*")) %>% 
           mutate(!!gene_col := make.unique(.data[[gene_col]], sep = "_"))
+      } else if (self$input_type == "PD") {
+        org_map <- inputs_type_lists$org_map
+        org_info <- org_map[[self$organism]]
+        if (is.null(org_info)) return(NULL)
+        orgdb     <- org_info$orgdb
+        g_names <- tryCatch({
+          bitr(
+            initial_table$Accession,
+            fromType = "UNIPROT",
+            toType   = "SYMBOL",
+            OrgDb   = orgdb
+          ) %>%
+            dplyr::rename(Accession = UNIPROT)
+        }, error = function(e) {
+          shiny::showNotification("Organism selected non compatible with Uniprot ID.", type = "error")
+          NULL
+        })
+        if (is.null(g_names)) return(NULL)
+        gene_col <- "SYMBOL"
+        protein_col <- "Accession"
+        required_columns <- c(gene_col, inputs_type_lists$metadata_list[[self$input_type]])
+        initial_table <- left_join(initial_table, g_names, by = "Accession") %>%
+          dplyr::filter(!stringr::str_detect(Accession, "ENSEMBL")) %>%
+          mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
+      } else if (self$input_type == "AlphaPept") {
+        gene_col <- "gene_symbol"
+        protein_col <- "uniprot_id"
+        required_columns <- gene_col
+        initial_table <- initial_table %>%
+          separate(
+            V1,
+            into = c("db", "uniprot_id", "gene"),
+            sep = "\\|",
+            fill = "right",
+            extra = "merge"
+          ) %>% 
+          mutate(gene_symbol = sub("_.*$", "", gene)) %>% 
+          filter(!stringr::str_detect(db, "REV_")) %>% 
+          mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
       } else {
         required_columns <- inputs_type_lists$metadata_list[[self$input_type]]
         gene_col <- required_columns[1]
@@ -474,14 +535,28 @@ QProMS <- R6Class(
       
       data <- self$filtered_data
       
-      filtered_data <- data %>%
-        {if (pep_filter == "peptides") 
-          filter(., `Peptides` >= pep_thr)
-          else if (pep_filter == "unique") 
-            filter(., `Unique peptides` >= pep_thr)
-          else 
-            filter(., `Razor + unique peptides` >= pep_thr)
-        }
+      if(self$input_type == "MaxQuant") {
+        filtered_data <- data %>%
+          {if (pep_filter == "peptides") 
+            filter(., `Peptides` >= pep_thr)
+            else if (pep_filter == "unique") 
+              filter(., `Unique peptides` >= pep_thr)
+            else 
+              filter(., `Razor + unique peptides` >= pep_thr)
+          }
+      }
+      
+      if(self$input_type == "PD") {
+        filtered_data <- data %>%
+          {if (pep_filter == "peptides") 
+            filter(., `# Peptides` >= pep_thr)
+            else if (pep_filter == "unique") 
+              filter(., `# Unique Peptides` >= pep_thr)
+            else 
+              filter(., `# Razor Peptides` >= pep_thr)
+          }
+      }
+      
       
       self$filtered_data <- filtered_data
     },
@@ -541,36 +616,38 @@ QProMS <- R6Class(
     },
     imputation = function(imp_methods, shift, scale, unique_visual = FALSE) {
       
-      data <- self$normalized_data %>% 
+      # Work on a local copy of normalized_data
+      data <- self$normalized_data %>%
         mutate(imputed = if_else(bin_intensity == 1, FALSE, TRUE))
       
-      if(imp_methods == "mixed"){
-        self$is_mixed <- TRUE
-      }else{
-        self$is_mixed <- FALSE
-      }
-      
-      if(imp_methods == "mixed" | imp_methods == "perseus"){
-        self$is_imp <- TRUE
+      # -----------------------------
+      # Perseus / Mixed imputation
+      # -----------------------------
+      if (imp_methods %in% c("mixed", "perseus")) {
         
-        if(self$is_mixed){
+        # Set mixed flag as in original logic
+        self$is_mixed <- imp_methods == "mixed"
+        self$is_imp   <- TRUE
+        
+        # Mixed-specific imputation
+        if (self$is_mixed) {
           set.seed(11)
           data_mixed <- data %>%
-            rownames_to_column() %>% 
+            rownames_to_column() %>%
             group_by(gene_names, condition) %>%
-            mutate(for_mean_imp = if_else((sum(bin_intensity) / n()) >= 0.75, TRUE, FALSE)) %>%
-            filter(for_mean_imp) %>% 
+            mutate(for_mean_imp = (sum(bin_intensity) / n()) >= self$mar_mnar_thresh) %>%
+            filter(for_mean_imp) %>%
             mutate(random_imp = runif(
               n = 1,
               min = min(intensity, na.rm = TRUE),
               max = max(intensity, na.rm = TRUE)
-            )) %>% 
-            ungroup() %>% 
+            )) %>%
+            ungroup() %>%
             select(rowname, for_mean_imp, random_imp)
           
-          data_mixed_final <- data %>% 
-            rownames_to_column() %>% 
-            left_join(data_mixed, by = "rowname") %>% 
+          data <- data %>%
+            rownames_to_column() %>%
+            left_join(data_mixed, by = "rowname") %>%
             mutate(
               imp_intensity = case_when(
                 bin_intensity == 0 & for_mean_imp ~ random_imp,
@@ -579,59 +656,162 @@ QProMS <- R6Class(
             ) %>%
             mutate(intensity = imp_intensity) %>%
             select(-c(rowname, for_mean_imp, random_imp, imp_intensity))
-          
-          data <- data_mixed_final
         }
         
-        if(unique_visual){
+        # Unique visual adjustments
+        if (unique_visual) {
           data_unique <- data %>%
             group_by(gene_names, condition) %>%
-            mutate(miss_val = n() - sum(bin_intensity)) %>%
-            mutate(n_size = n()) %>%
+            mutate(miss_val = n() - sum(bin_intensity),
+                   n_size = n()) %>%
             ungroup() %>%
             group_by(gene_names) %>%
             filter(any(miss_val <= 0)) %>%
             ungroup() %>%
-            filter(miss_val == n_size) %>% 
-            mutate(intensity = min(data$intensity, na.rm = TRUE), unique = TRUE) %>% 
-            select(-c(bin_intensity, miss_val, n_size)) %>% 
-            rename(unique_intensity = intensity) 
+            filter(miss_val == n_size) %>%
+            mutate(intensity = min(data$intensity, na.rm = TRUE),
+                   unique = TRUE) %>%
+            select(-c(bin_intensity, miss_val, n_size)) %>%
+            rename(unique_intensity = intensity)
           
-          data <- data %>% 
-            left_join(data_unique, by = c("gene_names", "label", "condition", "replicate")) %>% 
-            mutate(unique = if_else(is.na(unique), FALSE, unique)) %>% 
-            mutate(intensity = if_else(unique, unique_intensity, intensity)) %>% 
-            mutate(bin_intensity = if_else(unique, 1, bin_intensity)) %>% 
-            select(-c(unique_intensity, unique)) 
+          data <- data %>%
+            left_join(
+              data_unique,
+              by = c("gene_names", "label", "condition", "replicate")
+            ) %>%
+            mutate(
+              unique = if_else(is.na(unique), FALSE, unique),
+              intensity = if_else(unique, unique_intensity, intensity),
+              bin_intensity = if_else(unique, 1, bin_intensity)
+            ) %>%
+            select(-c(unique_intensity, unique))
         }
-        ## this funcion perform classical Perseus imputation
-        ## sice use random nomral distibution i will set a set.seed()
-        set.seed(11)
         
-        imputed_data <- data %>%
+        # Perseus-style random normal imputation
+        set.seed(11)
+        self$imputed_data <- data %>%
           group_by(label) %>%
-          # Define statistic to generate the random distribution relative to sample
           mutate(
             mean = mean(intensity, na.rm = TRUE),
-            sd = sd(intensity, na.rm = TRUE),
-            n = sum(!is.na(intensity)),
+            sd   = sd(intensity, na.rm = TRUE),
+            n    = sum(!is.na(intensity)),
             total = nrow(data) - n
           ) %>%
           ungroup() %>%
-          # Impute missing values by random draws from a distribution
-          # which is left-shifted by parameter 'shift' * sd and scaled by parameter 'scale' * sd.
-          mutate(imp_intensity = case_when(
-            is.na(intensity) ~ rnorm(total, mean = (mean - shift * sd), sd = sd * scale),
-            TRUE ~ intensity
-          )) %>%
+          mutate(
+            sd = ifelse(sd == 0, 1e-6, sd), # avoid zero-variance columns
+            imp_intensity = case_when(
+              is.na(intensity) ~ rnorm(
+                total,
+                mean = mean - shift * sd,
+                sd   = sd * scale
+              ),
+              TRUE ~ intensity
+            )
+          ) %>%
           mutate(intensity = imp_intensity) %>%
           select(-c(mean, sd, n, total, imp_intensity))
+      }
+      
+      # -----------------------------
+      # missForest imputation
+      # -----------------------------
+      else if (imp_methods == "missforest") {
         
-        self$imputed_data <- imputed_data
+        data <- self$normalized_data
         
-      }else{
+        label_class     <- class(data$label)
+        condition_class <- class(data$condition)
+        replicate_class <- class(data$replicate)
+        
+        self$is_imp <- TRUE
+        set.seed(11)
+        
+        # ---- long -> wide (rows: gene_names ; cols: label)
+        wide <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label)
+          ) %>%
+          group_by(gene_names, label) %>%
+          summarise(
+            intensity = mean(intensity, na.rm = TRUE),
+            .groups = "drop"
+          ) %>%
+          mutate(intensity = if_else(is.nan(intensity), NA_real_, intensity)) %>%  # important if all-NA
+          pivot_wider(
+            names_from  = label,
+            values_from = intensity
+          )
+        
+        # ---- IMPORTANT: convert to base data.frame so rownames persist
+        wide_df <- as.data.frame(wide)
+        rownames(wide_df) <- wide_df$gene_names
+        
+        # numeric matrix for missForest (drop gene_names)
+        wide_mat <- as.matrix(wide_df[, setdiff(names(wide_df), "gene_names")])
+        
+        # ---- missForest
+        mf <- missForest::missForest(
+          wide_mat,
+          verbose = FALSE,
+          maxiter = self$missforest_niter,
+          ntree   = self$missforest_ntree
+        )
+        
+        # ---- wide -> long (gene_names + label)
+        imputed_long <- mf$ximp %>%
+          as.data.frame() %>%
+          rownames_to_column("gene_names") %>%
+          pivot_longer(
+            -gene_names,
+            names_to  = "label",
+            values_to = "intensity"
+          )
+        
+        # ---- join imputed intensities back (preserve other columns)
+        self$imputed_data <- data %>%
+          mutate(
+            gene_names = as.character(gene_names),
+            label      = as.character(label)
+          ) %>%
+          select(-intensity) %>%
+          left_join(imputed_long, by = c("gene_names", "label")) %>%
+          mutate(imputed = bin_intensity == 0)
+        
+        # ---- restore original types (match Perseus/Mixed downstream expectations)
+        self$imputed_data <- self$imputed_data %>%
+          mutate(
+            label = if (inherits(data$label, "factor")) {
+              factor(label, levels = levels(data$label))
+            } else {
+              as.character(label)
+            },
+            condition = if (inherits(data$condition, "factor")) {
+              factor(condition, levels = levels(data$condition))
+            } else {
+              as.character(condition)
+            },
+            replicate = if (inherits(data$replicate, "integer")) {
+              as.integer(replicate)
+            } else {
+              replicate
+            }
+          )
+      }
+      
+      
+      
+      # -----------------------------
+      # No imputation
+      # -----------------------------
+      else {
         self$is_imp <- FALSE
       }
+      
+      
+      stopifnot(nrow(self$imputed_data) == nrow(self$normalized_data))
+      stopifnot(!all(is.na(self$imputed_data$intensity))) 
     },
     rank_protein = function(target, by_condition, selection, n_perc) {
       if(by_condition) {
@@ -669,7 +849,7 @@ QProMS <- R6Class(
         valid_val_filter = self$valid_val_filter,
         valid_val_thr = self$valid_val_thr
       )
-      if(self$input_type == "MaxQuant") {
+      if(self$input_type %in% c("MaxQuant", "PD")) {
         self$subset_peptides(
           pep_filter = self$pep_filter,
           pep_thr = self$pep_thr
@@ -698,7 +878,7 @@ QProMS <- R6Class(
         distinct(gene_names) %>% 
         pull(gene_names)
     },
-    reactable_interactive = function(table) {
+    reactable_interactive = function(table, sel = "multiple") {
       if(is.null(table)){return(NULL)}
       t <- table %>% 
         reactable(
@@ -708,7 +888,7 @@ QProMS <- R6Class(
           compact = TRUE,
           wrap = FALSE,
           height = "auto",
-          selection = "multiple",
+          selection = sel,
           paginationType = "simple",
           showPageSizeOptions = TRUE,
           pageSizeOptions = c(6, 12, 18, 24),
@@ -733,7 +913,7 @@ QProMS <- R6Class(
           opacity = 1,
           color = "#555"
         ) %>%
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
     },
     plot_protein_counts = function() {
       
@@ -773,7 +953,7 @@ QProMS <- R6Class(
           )
         ) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -795,6 +975,7 @@ QProMS <- R6Class(
         e_tooltip(trigger = "item") %>%
         e_grid(containLabel = TRUE) %>%
         e_legend(show = FALSE) %>%
+        e_color(self$primary_color) %>% 
         e_y_axis(
           name = "log2 Intensity",
           nameLocation = "center",
@@ -807,7 +988,7 @@ QProMS <- R6Class(
         ) %>% 
         e_x_axis(show = FALSE) %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -827,7 +1008,7 @@ QProMS <- R6Class(
         e_bar(occurrence) %>%
         e_tooltip(trigger = "item") %>%
         e_grid(containLabel = TRUE) %>%
-        e_color(self$color_palette) %>%
+        e_color(self$primary_color) %>%
         e_legend(textStyle = list(fontSize = self$plot_font_size)) %>%
         e_y_axis(
           name = "Counts",
@@ -841,13 +1022,39 @@ QProMS <- R6Class(
         ) %>% 
         e_x_axis(axisLabel = list(fontSize = self$plot_font_size)) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
+      return(p)
+    },
+    plot_protein_coverage_intersections = function() {
+      
+      if(is.null(self$filtered_data)){return(NULL)}
+      upset_df <- self$filtered_data %>% 
+        group_by(label) %>%
+        summarise(genes = list(bin_intensity)) %>% 
+        deframe() %>% 
+        as.data.frame()
+      if(ncol(upset_df) < 2){return(NULL)}
+      
+      p <- upset(
+        upset_df,
+        nsets = ncol(upset_df),
+        order.by = "freq",
+        main.bar.color = self$primary_color,
+        text.scale = 1.5
+      )
       return(p)
     },
     plot_cv = function() {
       
       if(is.null(self$normalized_data)){return(NULL)}
+      
+      condition_groups <- self$expdesign %>%
+        group_by(condition) %>%
+        summarise(count = n()) %>%
+        filter(count >= 2) %>%
+        nrow()
+      if(condition_groups<1){return(self$plot_empty_message("not enough replicates to compute CV"))}
 
       p <- self$normalized_data %>% 
         group_by(gene_names, condition) %>% 
@@ -881,7 +1088,7 @@ QProMS <- R6Class(
         e_grid(containLabel = TRUE) %>%
         e_color(self$color_palette) %>% 
         e_toolbox_feature(feature = "saveAsImage") %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -904,7 +1111,7 @@ QProMS <- R6Class(
         e_bar(Missing, stack = "grp", bind = perc_missing) %>%
         e_x_axis(name = "", axisLabel = list(interval = 0, rotate = 45, fontSize = self$plot_font_size)) %>%
         e_tooltip(trigger = "item") %>%
-        e_color(c("#0d6efd", "#6c757d")) %>% 
+        e_color(c(self$primary_color, "#6c757d")) %>% 
         e_grid(containLabel = TRUE) %>%
         e_legend(textStyle = list(fontSize = self$plot_font_size)) %>%
         e_y_axis(
@@ -918,7 +1125,7 @@ QProMS <- R6Class(
           )
         ) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -968,9 +1175,9 @@ QProMS <- R6Class(
           )
         ) %>%
         e_grid(containLabel = TRUE) %>%
-        e_color(c("#0d6efd", "#bc3754")) %>% 
+        e_color(c(self$primary_color, "#bc3754")) %>% 
         e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -1041,6 +1248,7 @@ QProMS <- R6Class(
     plot_pca = function(view_3d = FALSE) {
       
       if(is.null(self$imputed_data)){return(NULL)}
+      if(nrow(self$expdesign) < 3){return(self$plot_empty_message("not enough samples to compute PC"))}
       
       ## generate a matrix from imputed intensiy
       mat <- self$imputed_data %>%
@@ -1057,7 +1265,6 @@ QProMS <- R6Class(
       ## calculate persentage of each PC
       pca_var <- pca$sdev^2
       pca_var_perc <- round(pca_var/sum(pca_var)*100, 1)
-      
       ## create a data.frame for the first 3 PC
       pca_table <- data.frame(
         label = rownames(pca$x),
@@ -1105,7 +1312,7 @@ QProMS <- R6Class(
           e_color(self$color_palette) %>% 
           e_grid(containLabel = TRUE) %>%
           e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
-          e_show_loading(text = "Loading...", color = "#0d6efd")
+          e_show_loading(text = "Loading...", color = self$primary_color)
       }else{
         p <- pca_table %>%
           group_by(condition) %>%
@@ -1154,13 +1361,13 @@ QProMS <- R6Class(
           e_color(self$color_palette) %>% 
           e_grid(containLabel = TRUE) %>%
           e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
-          e_show_loading(text = "Loading...", color = "#0d6efd")
+          e_show_loading(text = "Loading...", color = self$primary_color)
       }
       return(p)
     },
     plot_correlation = function() {
-      
       if(is.null(self$normalized_data)){return(NULL)}
+      if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the correlation matrix."))}
       
       if(self$is_imp){
         data <- self$imputed_data
@@ -1207,7 +1414,7 @@ QProMS <- R6Class(
           textStyle = list(fontSize = self$plot_font_size)
         ) %>%
         e_grid(containLabel = TRUE) %>%
-        e_show_loading(text = "Loading...", color = "#0d6efd") %>% 
+        e_show_loading(text = "Loading...", color = self$primary_color) %>% 
         e_toolbox_feature(feature = c("saveAsImage"))
       return(p)
     },
@@ -1236,7 +1443,7 @@ QProMS <- R6Class(
         e_scatter(y, legend = FALSE, symbol_size = 5, bind = gene_names) %>%
         e_x_axis(min = min_plot, max = max_plot) %>%
         e_y_axis(min = min_plot, max = max_plot) %>%
-        e_color(self$color_palette) %>%
+        e_color(self$primary_color) %>% 
         e_toolbox_feature(feature = "dataZoom") %>% 
         e_tooltip(
           formatter = JS("
@@ -1268,10 +1475,19 @@ QProMS <- R6Class(
         e_grid(containLabel = TRUE) %>%
         e_title(
           paste0("correlation: ", value),
-          left = "center",
+          left = "left",
           textStyle = list(fontSize = self$plot_font_size)
         ) %>%  
         e_toolbox_feature(feature = "saveAsImage")
+      
+      p <- p %>%
+        e_lm(
+          formula = y ~ x,
+          name = "Regression",
+          smooth = FALSE,
+          lineStyle = list(width = 2, type = "solid"),
+          itemStyle = list(color = "#1a1a1a")
+        )
       
       if (highlights_names != "") {
         for (name in str_split_1(highlights_names, ":")) {
@@ -1289,7 +1505,7 @@ QProMS <- R6Class(
               symbolSize = 50,
               silent = TRUE,
               label = list(color = "black", fontWeight = "normal", fontSize = 16),
-              itemStyle = list(color = "#0d6efd",  borderColor = "#0d6efd", borderWidth = 0.2)
+              itemStyle = list(color = self$primary_color,  borderColor = self$primary_color, borderWidth = 0.2)
             )
         }
       }
@@ -1298,6 +1514,7 @@ QProMS <- R6Class(
     plot_multi_scatter = function(gene_names_h, x_filter, y_filter) {
       
       if(is.null(self$normalized_data)){return(NULL)}
+      if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the plot."))}
       ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
@@ -1326,10 +1543,8 @@ QProMS <- R6Class(
     plot_protein_rank = function(highlights_names = NULL) {
       
       if(is.null(self$rank_data)){return(NULL)}
-      colors <- viridis(n = 2 , direction = 1, end = 0.90, begin = 0.10, option = self$palette)
-      
       p <- self$rank_data %>%
-        mutate(color = if_else(gene_names %in% self$protein_rank_list, colors[2], colors[1])) %>%
+        mutate(color = if_else(gene_names %in% self$protein_rank_list, self$primary_color, "#6c757d")) %>%
         e_charts(rank, renderer = self$plot_format) %>%
         e_scatter(intensity,
                   legend = FALSE,
@@ -1392,8 +1607,8 @@ QProMS <- R6Class(
                 fontSize = 16
               ),
               itemStyle = list(
-                color = "#0d6efd",
-                borderColor = "#0d6efd",
+                color = self$primary_color,
+                borderColor = self$primary_color,
                 borderWidth = 0.2
               )
             )
@@ -1413,6 +1628,17 @@ QProMS <- R6Class(
       conds <- str_split_1(test, "_vs_")
       cond_1 <- conds[1]
       cond_2 <- conds[2]
+      
+      mean_abundance_table <- data %>%
+        filter(condition %in% c(cond_1, cond_2)) %>%
+        pivot_wider(id_cols = "gene_names", names_from = "label", values_from = "intensity") %>%
+        rowwise() %>%
+        mutate(mean_abundance = mean(c(
+          mean(c_across(starts_with(cond_1)), na.rm = TRUE), 
+          mean(c_across(starts_with(cond_2)), na.rm = TRUE)
+        ), na.rm = TRUE)) %>% 
+        ungroup() %>%
+        select(gene_names, mean_abundance) 
       
       if(nrow(filter(self$expdesign, condition == cond_1)) == nrow(filter(self$expdesign, condition == cond_2))) {
         paired_test <- FALSE
@@ -1476,6 +1702,9 @@ QProMS <- R6Class(
           mutate(significant = abs(fold_change) >= fc & p_adj <= alpha) %>%
           rename_with(~paste0(cond_1, "_vs_", cond_2, "_", .), c("p_val", "fold_change", "p_adj", "significant"))
       }
+      stat_data <- stat_data %>% 
+        left_join(mean_abundance_table) %>% 
+        rename_with(~paste0(cond_1, "_vs_", cond_2, "_", .), c("mean_abundance"))
       return(stat_data)
     },
     stat_uni_test = function(test, fc, alpha, p_adj_method, paired_test, test_type) {
@@ -1603,7 +1832,7 @@ QProMS <- R6Class(
         ) %>% 
         e_grid(containLabel = TRUE) %>%
         e_group("grp") %>%
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       # Aggiungere punti di evidenziazione
       if (highlights_names != "") {
@@ -1622,7 +1851,7 @@ QProMS <- R6Class(
               symbolSize = 50,
               silent = TRUE,
               label = list(color = "black", fontWeight = "normal", fontSize = 16),
-              itemStyle = list(color = "#0d6efd",  borderColor = "#0d6efd", borderWidth = 0.2)
+              itemStyle = list(color = self$primary_color,  borderColor = self$primary_color, borderWidth = 0.2)
             )
         }
       }
@@ -1638,6 +1867,118 @@ QProMS <- R6Class(
           e_y_axis(min = 0, max = max_y_plot + 1)
       }
       
+      return(p)
+    },
+    plot_ma_single = function(test, highlights_names, same_x, same_y) {
+      
+      max_y_plot <- self$stat_table %>%
+        select(ends_with("fold_change")) %>%
+        max(na.rm = TRUE) %>%
+        ceiling()
+      
+      min_y_plot <- self$stat_table %>%
+        select(ends_with("fold_change")) %>%
+        min(na.rm = TRUE) %>%
+        floor()
+      
+      min_x_plot <- self$stat_table %>%
+        select(ends_with("mean_abundance")) %>% 
+        min(na.rm = TRUE) %>%
+        floor()
+      
+      max_x_plot <- self$stat_table %>%
+        select(ends_with("mean_abundance")) %>%
+        max(na.rm = TRUE) %>%
+        ceiling()
+      
+      table <- self$stat_table %>%
+        select(gene_names, starts_with(test)) %>%
+        rename_at(vars(matches(test)), ~ str_remove(., paste0(test, "_")))
+      
+      p <- table %>%
+        mutate(color = case_when(
+          fold_change > 0 & significant ~ "#67001f",
+          fold_change < 0 & significant ~ "#053061",
+          TRUE ~ "#e9ecef"
+        )) %>%
+        mutate(
+          fold_change = round(fold_change, 3),
+          mean_abundance = round(mean_abundance, 3)
+        ) %>%
+        e_charts(mean_abundance, renderer = self$plot_format) %>%
+        e_scatter(
+          fold_change,
+          legend = FALSE,
+          bind = gene_names,
+          symbol_size = 5
+        ) %>%
+        e_tooltip(formatter = htmlwidgets::JS("
+      function(params) {
+        return('<strong>' + params.name + '</strong><br />A: ' +
+               params.value[0] + '<br />LFC: ' + params.value[1])
+      }
+    ")) %>%
+        e_add_nested("itemStyle", color) %>%
+        e_toolbox_feature(feature = c("saveAsImage", "dataZoom")) %>%
+        e_x_axis(
+          name = "Mean abundance (A)",
+          nameLocation = "center",
+          axisLabel = list(fontSize = self$plot_font_size),
+          nameTextStyle = list(
+            fontWeight = "bold",
+            fontSize = self$plot_font_size,
+            lineHeight = 4 * self$plot_font_size
+          )
+        ) %>%
+        e_y_axis(
+          name = "Log2 fold change (M)",
+          nameLocation = "center",
+          axisLabel = list(fontSize = self$plot_font_size),
+          nameTextStyle = list(
+            fontWeight = "bold",
+            fontSize = self$plot_font_size,
+            lineHeight = 6 * self$plot_font_size
+          )
+        ) %>%
+        e_grid(containLabel = TRUE) %>%
+        e_group("grp") %>%
+        e_show_loading(text = "Loading...", color = self$primary_color)
+      
+      if (highlights_names != "") {
+        for (name in str_split_1(highlights_names, ":")) {
+          highlights_name <- table %>%
+            filter(gene_names == name) %>%
+            select(
+              xAxis = mean_abundance,
+              yAxis = fold_change,
+              value = gene_names
+            ) %>% as.list()
+          
+          p <- p %>%
+            e_mark_point(
+              data = highlights_name,
+              symbol = "pin",
+              symbolSize = 50,
+              silent = TRUE,
+              label = list(color = "black", fontWeight = "normal", fontSize = 16),
+              itemStyle = list(
+                color = self$primary_color,
+                borderColor = self$primary_color,
+                borderWidth = 0.2
+              )
+            )
+        }
+      }
+      
+      if (same_x) {
+        p <- p %>%
+          e_x_axis(min = min_x_plot - 1, max = max_x_plot + 1)
+      }
+      
+      if (same_y) {
+        p <- p %>%
+          e_y_axis(min = min_y_plot - 1, max = max_y_plot + 1)
+      }
       return(p)
     },
     plot_volcano = function(tests, gene_names_marked, all_same_x, all_same_y) {
@@ -1668,17 +2009,50 @@ QProMS <- R6Class(
       
       return(p)
     },
+    plot_ma = function(tests, gene_names_marked, all_same_x, all_same_y) {
+      
+      if(is.null(self$stat_table)){return(NULL)}
+      ## create the resouce path for trelliscope
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
+      
+      if(is.null(gene_names_marked)){
+        names <- ""
+      } else {
+        names <- paste(gene_names_marked, collapse = ":")
+      }
+      contrasts_table <- tibble(
+        test = tests,
+        highlights_names = names,
+        same_x = all_same_x,
+        same_y = all_same_y
+      )
+      p <- contrasts_table %>% 
+        mutate(plots_panel = panel_lazy(self$plot_ma_single)) %>% 
+        as_trelliscope_df(name = "MA Plots",
+                          path = file.path(tr_dir, "test"),
+                          jsonp = FALSE) %>% 
+        set_default_layout(ncol = 1)
+      
+      return(p)
+    },
     plot_stat_profile_single = function(contrast, gene) {
       
       if(gene == "NO_GENE_SELECTED"){return(self$plot_empty_message("No genes selected."))}
       data <- if (self$is_imp) self$imputed_data else self$normalized_data
       cond <- unique(str_split_1(contrast, "_vs_"))
       
-      p <- data %>% 
+      data_p <- data %>% 
         filter(gene_names == gene) %>% 
         filter(condition %in% cond) %>%
         group_by(condition) %>%
-        drop_na() %>% 
+        drop_na()
+      
+      min_plot <- round(min(data_p %>% pull(intensity), na.rm = TRUE) - 1, 0)
+      max_plot <- round(max(data_p %>% pull(intensity), na.rm = TRUE) + 1, 0)
+
+      p <- data_p %>% 
         e_charts(renderer = self$plot_format) %>%
         e_boxplot(
           intensity,
@@ -1686,7 +2060,13 @@ QProMS <- R6Class(
           outliers = FALSE,
           itemStyle = list(borderWidth = 2)
         ) %>%
-        e_legend(textStyle = list(fontSize = self$plot_font_size)) %>%
+        e_y_axis(min = min_plot, max = max_plot) %>%
+        e_legend(show = FALSE) %>%
+        e_title(
+          gene,
+          left = "center",
+          textStyle = list(fontSize = self$plot_font_size)
+        ) %>%
         e_y_axis(
           name = "log2 Intensity",
           nameLocation = "center",
@@ -1920,7 +2300,7 @@ QProMS <- R6Class(
         e_grid(containLabel = TRUE) %>%
         e_tooltip() %>%
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataZoom")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       
       return(p)
     },
@@ -1977,7 +2357,7 @@ QProMS <- R6Class(
           )
         ) %>%
         e_toolbox_feature(feature = c("saveAsImage", "restore", "dataZoom")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       return(p)
     },
     plot_cluster_profile = function() {
@@ -2065,20 +2445,10 @@ QProMS <- R6Class(
       edges_string_table <- NULL
       edges_corum_table <- NULL
       if(is.null(self$nodes_table)){return(NULL)}
-      if(self$organism == "human") {
-        tax_id <- 9606
-      } else if(self$organism == "mouse") {
-        tax_id <- 10090
-      } else if(self$organism == "ecoli") {
-        tax_id <- 562
-      } else if(self$organism == "drosophila") {
-        tax_id <- 7227
-      } else if(self$organism == "buddingyeast") {
-        tax_id <- 559292
-      } else {
-        tax_id <- 9606
-      }
-      
+      org_map <- inputs_type_lists$org_map
+      org_info <- org_map[[self$organism]]
+      if (is.null(org_info)) return(NULL)
+      tax_id <- org_info$tax_id
       if("string" %in% source) {
         edges_string_table <- self$name_for_edges %>%
           rba_string_interactions_network(species = tax_id, verbose = FALSE) %>%
@@ -2215,7 +2585,7 @@ QProMS <- R6Class(
           size = size
         ) %>%
         e_tooltip() %>%
-        e_toolbox_feature(feature = "saveAsImage") 
+        e_toolbox_feature(feature = c("saveAsImage", "restore"))
       
       if (show_names) {
         p <- p %>%
@@ -2316,22 +2686,15 @@ QProMS <- R6Class(
       }
       return(data)
     },
-    go_ora = function(list_from, focus, ontology, simplify_thr, alpha, p_adj_method, background) {
+    go_ora = function(list_from, focus, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size, background) {
       if(is.null(focus)){return(NULL)}
-      orgdb <- if (self$organism == "human") {
-        org.Hs.eg.db
-      } else if (self$organism == "mouse") {
-        org.Mm.eg.db
-      } else if (self$organism == "ecoli") {
-        org.EcK12.eg.db  
-      } else if (self$organism == "drosophila") {
-        org.Dm.eg.db     
-      } else if (self$organism == "buddingyast") {
-        org.Sc.sgd.db   
-      } else {
-        org.Mm.eg.db
-      }
+      org_map <- inputs_type_lists$org_map
+      org_info <- org_map[[self$organism]]
+      if (is.null(org_info)) return(NULL)
       
+      orgdb     <- org_info$orgdb
+      kegg_org  <- org_info$kegg
+      wiki_org  <- org_info$wiki
       
       if (list_from == "univariate") {
         groupped_data <- map(focus, ~ self$make_ora_list_internal(focus = .x)) %>% 
@@ -2374,20 +2737,73 @@ QProMS <- R6Class(
         uni <- NULL
       }
       
-      self$ora_result_list <- map(gene_vector, possibly(~ enrichGO(
-        gene = .x,
-        OrgDb = orgdb,
-        keyType = 'SYMBOL',
-        ont = ontology,
-        pAdjustMethod = p_adj_method,
-        universe = uni,
-        readable = TRUE) %>% 
-          clusterProfiler::filter(p.adjust < alpha) %>% 
-          simplify(cutoff = simplify_thr), otherwise = NULL))
+      if (database == "GO") {
+        self$ora_result_list <- map(gene_vector, possibly(~ enrichGO(
+          gene = .x,
+          OrgDb = orgdb,
+          keyType = 'SYMBOL',
+          ont = ontology,
+          pAdjustMethod = p_adj_method,
+          universe = uni,
+          minGSSize = min_gs_size,
+          maxGSSize = max_gs_size,
+          readable = TRUE) %>% 
+            clusterProfiler::filter(p.adjust < alpha) %>% 
+            simplify(cutoff = simplify_thr), otherwise = NULL))
+      }
+      
+      if (database == "KEGG") {
+        entrez <- map(
+          gene_vector,
+          ~ bitr(
+            .x,
+            fromType = "SYMBOL",
+            toType   = "ENTREZID",
+            OrgDb    = orgdb
+          ) %>% pull(ENTREZID)
+        )
+        self$ora_result_list <- map(entrez, possibly(~ enrichKEGG(
+          gene = .x,
+          organism = kegg_org,
+          keyType = 'kegg',
+          pAdjustMethod = p_adj_method,
+          universe = uni,
+          minGSSize = min_gs_size,
+          maxGSSize = max_gs_size) %>% 
+            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+      }
+      
+      if (database == "WikiPathways") {
+        entrez <- map(
+          gene_vector,
+          ~ bitr(
+            .x,
+            fromType = "SYMBOL",
+            toType   = "ENTREZID",
+            OrgDb    = orgdb
+          ) %>% pull(ENTREZID)
+        )
+        self$ora_result_list <- map(entrez, possibly(~ enrichWP(
+          gene = .x,
+          organism = wiki_org,
+          pAdjustMethod = p_adj_method,
+          universe = uni,
+          minGSSize = min_gs_size,
+          maxGSSize = max_gs_size) %>% 
+            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+      }
       
     },
     print_ora_table = function(arranged_with) {
       if(length(compact(self$ora_result_list)) == 0){
+        self$ora_table <- NULL
+        return(NULL)
+      }
+      empty <- map(self$ora_result_list, ~ pluck(.x, "result")) %>%
+        list_rbind(names_to = "group") %>% 
+        as_tibble() %>% 
+        nrow()
+      if(empty == 0) {
         self$ora_table <- NULL
         return(NULL)
       }
@@ -2422,7 +2838,7 @@ QProMS <- R6Class(
         e_bar(value, bind = Description) %>%
         e_flip_coords() %>%
         e_grid(containLabel = TRUE) %>%
-        e_color("#0d6efd") %>%
+        e_color(self$primary_color) %>%
         e_tooltip(
           formatter = JS(
             paste0("function(params){return('<strong>", arrange, ": </strong>' + params.value[0])}")
@@ -2442,7 +2858,7 @@ QProMS <- R6Class(
         e_legend(show = FALSE) %>%
         e_labels(show = TRUE, formatter= '{b}', position = "insideLeft") %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       return(p)
     },
     plot_ora = function(groups, arrange_with, show_n_category) {
@@ -2451,7 +2867,7 @@ QProMS <- R6Class(
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
-    
+      if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
         arrange = arrange_with,
@@ -2462,7 +2878,7 @@ QProMS <- R6Class(
         as_trelliscope_df(name = "BarPlot",
                           path = file.path(tr_dir, "test"),
                           jsonp = FALSE) %>% 
-        set_default_layout(ncol = 1)
+        set_default_layout(ncol = n_col)
       
       return(p)
     },
@@ -2487,12 +2903,13 @@ QProMS <- R6Class(
               sticky = "left",
               style = list(borderRight  = "1px solid #eee")
             ),
-            geneID = colDef(minWidth = 1500, align = "left")
+            geneID = colDef(minWidth = 1500, align = "left"),
+            Description = colDef(minWidth = 500, align = "left")
           )
         )
       return(t)
     },
-    go_gsea_rank_vector = function(test, rank, cond) {
+    go_gsea_rank_vector = function(test, rank, cond, db, org_db) {
       if(is.null(test)){return(NULL)}
       if (rank == "fc") {
         cond_1 <- str_split_1(test, "_vs_")[1]
@@ -2504,9 +2921,7 @@ QProMS <- R6Class(
           pivot_wider(names_from = condition, values_from = mean) %>%
           mutate(fold_change = get(cond_1) - get(cond_2)) %>%
           arrange(desc(fold_change)) %>%
-          select(gene_names, fold_change) %>%
-          deframe() %>%
-          list()
+          select(gene_names, score = fold_change) 
       } else {
         if (cond) {
           gsea_vec <- self$imputed_data %>%
@@ -2514,68 +2929,144 @@ QProMS <- R6Class(
             group_by(gene_names) %>%
             summarise(mean_intensity = mean(intensity), .groups = "drop") %>%
             arrange(desc(mean_intensity)) %>%
-            select(gene_names, mean_intensity) %>%
-            deframe() %>%
-            list()
+            select(gene_names, score = mean_intensity)
         } else {
           gsea_vec <- self$imputed_data %>%
             filter(label == test) %>%
             arrange(desc(intensity)) %>%
-            select(gene_names, intensity) %>%
-            deframe() %>%
-            list()
+            select(gene_names, score = intensity) 
         }
       }
-      gsea_list_vec <- set_names(gsea_vec, test)
+      if(db == "GO") {
+        gsea_vec_final <- gsea_vec %>%
+          deframe() %>%
+          list()
+      } else {
+        gsea_vec$idx <- seq_len(nrow(gsea_vec))
+        conv <- bitr(
+          gsea_vec$gene_names,
+          fromType = "SYMBOL",
+          toType   = "ENTREZID",
+          OrgDb    = org_db
+        )
+        conv <- conv[!duplicated(conv$SYMBOL), ]
+        gsea_vec$ENTREZID <- conv$ENTREZID[
+          match(gsea_vec$gene_names, conv$SYMBOL)
+        ]
+        gsea_vec <- gsea_vec[!is.na(gsea_vec$ENTREZID), ]
+        gsea_vec[order(gsea_vec$idx), ]
+        gsea_vec <- gsea_vec[, c("ENTREZID", "score", "idx")]
+        gsea_vec <- do.call(
+          rbind,
+          lapply(
+            split(gsea_vec, gsea_vec$ENTREZID),
+            function(x) x[which.max(abs(x$score)), ]
+          )
+        )
+        gsea_vec <- gsea_vec[order(gsea_vec$idx), c("ENTREZID", "score")]
+        rownames(gsea_vec) <- NULL
+        gsea_vec_final <- gsea_vec %>%
+          deframe() %>%
+          list()
+      }
+      gsea_list_vec <- set_names(gsea_vec_final, test)
       return(gsea_list_vec)
     },
-    go_gsea = function(test, rank_type, by_condition, ontology, simplify_thr, alpha, p_adj_method) {
+    go_gsea = function(test, rank_type, by_condition, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size) {
       if(is.null(test)){return(NULL)}
+      org_map <- inputs_type_lists$org_map
+      org_info <- org_map[[self$organism]]
+      if (is.null(org_info)) return(NULL)
       
-      orgdb <- if (self$organism == "human") {
-        org.Hs.eg.db
-      } else if (self$organism == "mouse") {
-        org.Mm.eg.db
-      } else if (self$organism == "ecoli") {
-        org.EcK12.eg.db  # E. coli K12 database
-      } else if (self$organism == "drosophila") {
-        org.Dm.eg.db     # Drosophila database
-      } else if (self$organism == "buddingyast") {
-        org.Sc.sgd.db    # Saccharomyces cerevisiae (yeast) database
-      } else {
-        org.Hs.eg.db
-      }
-      
+      orgdb     <- org_info$orgdb
+      kegg_org  <- org_info$kegg
+      wiki_org  <- org_info$wiki
       
       list_of_gesa_vector <- map(
         .x = test,
-        .f = ~ self$go_gsea_rank_vector(test = .x, rank = rank_type, cond = by_condition)
+        .f = ~ self$go_gsea_rank_vector(
+          test = .x,
+          rank = rank_type,
+          cond = by_condition,
+          db = database,
+          org_db = orgdb
+        )
       ) %>% flatten()
       
-      self$gsea_result_list <- map(
-        .x = list_of_gesa_vector,
-        .f = possibly(
-          ~ gseGO(
-            geneList     = .x,
-            OrgDb        = orgdb,
-            ont          = ontology,
-            keyType      = 'SYMBOL',
-            pAdjustMethod = p_adj_method,
-            verbose      = FALSE,
-            nPermSimple = 10000,
-            eps = 0
-          )  %>%
-            clusterProfiler::filter(p.adjust < alpha) %>%
-            simplify(cutoff = simplify_thr),
-          otherwise = NULL
+      if (database == "GO") {
+        self$gsea_result_list <- map(
+          .x = list_of_gesa_vector,
+          .f = possibly(
+            ~ gseGO(
+              geneList      = .x,
+              OrgDb         = orgdb,
+              ont           = ontology,
+              keyType       = 'SYMBOL',
+              pAdjustMethod = p_adj_method,
+              minGSSize     = min_gs_size,
+              maxGSSize     = max_gs_size,
+              verbose       = FALSE,
+              nPermSimple   = 10000,
+              eps           = 0
+            )  %>%
+              clusterProfiler::filter(p.adjust < alpha) %>%
+              simplify(cutoff = simplify_thr),
+            otherwise = NULL
+          )
         )
-      )
+      }
+      if (database == "KEGG") {
+        self$gsea_result_list <- map(
+          .x = list_of_gesa_vector,
+          .f = possibly(
+            ~ gseKEGG(
+              geneList  = .x,
+              organism = kegg_org,
+              keyType = 'kegg',
+              pAdjustMethod = p_adj_method,
+              minGSSize = min_gs_size,
+              maxGSSize = max_gs_size,
+              verbose       = FALSE,
+              nPermSimple   = 10000,
+              eps           = 0
+            ) %>%
+              clusterProfiler::filter(p.adjust < alpha),
+            otherwise = NULL
+          )
+        )
+      }
+      if (database == "WikiPathways") {
+        self$gsea_result_list <- map(
+          .x = list_of_gesa_vector, 
+          .f = possibly(
+            ~ gseWP(
+            geneList = .x,
+            organism = wiki_org,
+            pAdjustMethod = p_adj_method,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size,
+            verbose       = FALSE,
+            nPermSimple   = 10000,
+            eps           = 0) %>% 
+            clusterProfiler::filter(p.adjust < alpha), 
+          otherwise = NULL
+          )
+        )
+      }
     },
     print_gsea_table = function(arranged_with) {
       if(length(compact(self$gsea_result_list)) == 0){
         self$gsea_table <- NULL
         return(NULL)
       }
+      empty <- map(self$gsea_result_list, ~ pluck(.x, "result")) %>%
+        list_rbind(names_to = "group") %>% 
+        as_tibble() %>% 
+        nrow()
+      if(empty == 0) {
+        self$gsea_table <- NULL
+        return(NULL)
+        }
       self$gsea_table <- map(self$gsea_result_list, ~ pluck(.x, "result")) %>%
         list_rbind(names_to = "group") %>% 
         as_tibble() %>% 
@@ -2625,7 +3116,7 @@ QProMS <- R6Class(
         e_legend(show = FALSE) %>%
         e_labels(show = TRUE, formatter= '{b}', position = "insideLeft") %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataView")) %>% 
-        e_show_loading(text = "Loading...", color = "#0d6efd")
+        e_show_loading(text = "Loading...", color = self$primary_color)
       return(p)
     },
     plot_gsea = function(groups, arrange_with, show_n_category) {
@@ -2634,7 +3125,7 @@ QProMS <- R6Class(
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
-      
+      if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
         arrange = arrange_with,
@@ -2645,9 +3136,26 @@ QProMS <- R6Class(
         as_trelliscope_df(name = "BarPlot",
                           path = file.path(tr_dir, "test"),
                           jsonp = FALSE) %>% 
-        set_default_layout(ncol = 1)
+        set_default_layout(ncol = n_col)
       
       return(p)
+    },
+    plot_gseaplot = function(focus, gene_set_ID) {
+      if(is.null(self$gsea_table) || is.null(focus) || length(gene_set_ID) == 0){return(NULL)}
+      data <- self$gsea_table %>%  
+        filter(group == focus) 
+      if (nrow(data) == 0) {
+        return(NULL)
+      }
+      plot_title <- data %>% 
+        filter(ID == gene_set_ID) %>% 
+        pull(Description) %>% 
+        unique()
+      gseaplot2(
+        self$gsea_result_list[[focus]],
+        geneSetID = gene_set_ID, 
+        title = plot_title
+      )
     },
     download_excel = function(table, name, handler) {
       header_style <- createStyle(

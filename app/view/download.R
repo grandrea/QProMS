@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, observe, downloadButton, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate],
+  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput,  checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate],
   bslib[page_fillable, layout_columns, card, card_header, card_body, accordion, accordion_panel, nav_select, tooltip],
   gargoyle[init, watch, trigger],
   quarto[quarto_render],
@@ -11,103 +11,163 @@ box::use(
 #' @export
 ui <- function(id) {
   ns <- NS(id)
-  page_fillable(
+  
+  fluidPage(
     layout_columns(
-      col_widths = c(12, -1, 10, -1, 12),
-      row_heights = c(1,10,1),
-      div(),
+      col_widths = c(12, 12, 12),
+      gap = "1rem",
       card(
-        card_header(h4(class = "text-center", "Download Results")),
+        card_header(
+          h3("📥 Export results")
+        ),
         card_body(
-          accordion(
-            id = ns("accordion"),
-            multiple = FALSE,
-            accordion_panel(
-              title = "Download Result Tables",
-              id = ns("tables"),
-              layout_columns(
-                selectInput(
-                  inputId = ns("select_table"),
-                  label = "Select Table",
-                  choices = c("Filtred", "Normalized", "Imputed", "Ranked", "Volcanos", "Heatmap", "Nodes", "Edges", "ORA", "GSEA"),
-                  selected = "Filtred",
-                  width = "100%"
+          p(
+            class = "text-muted",
+            "Download processed tables, generate a comprehensive analysis report, ",
+            "or save the current analysis session to continue later."
+          )
+        )
+      ),
+      card(
+        card_header(
+          h4("📊 Export result tables")
+        ),
+        card_body(
+          layout_columns(
+            col_widths = c(6, 3, 3),
+            selectInput(
+              ns("select_table"),
+              "Table",
+              choices = list(
+                "Preprocessing" = c(
+                  "Filtered",
+                  "Normalized",
+                  "Imputed"
                 ),
-                selectInput(
-                  inputId = ns("table_extension"),
-                  label = "File extension ",
-                  choices = c(".xlsx", ".csv", ".tsv"),
-                  selected = ".xlsx",
-                  width = "100%"
+                "Statistical analysis" = c(
+                  "Ranked",
+                  "Volcano"
                 ),
-                conditionalPanel(
-                  condition = "input.select_table == 'Filtred' || input.select_table == 'Normalized' || input.select_table == 'Imputed' || input.select_table == 'Volcanos' || input.select_table == 'Heatmap'",
-                  ns = ns,
-                  selectInput(
-                    inputId = ns("add_metadata"),
-                    label = "Add Metadata Columns",
-                    choices = NULL,
-                    width = "100%",
-                    multiple = TRUE
-                  )
+                "Visualization data" = c(
+                  "Heatmap",
+                  "Nodes",
+                  "Edges"
                 ),
-                downloadButton(
-                  outputId = ns("download_table"),
-                  label = "DOWNLOAD",
-                  width = "100%",
-                  class = "bg-primary mt-auto",
-                  icon = NULL
+                "Functional enrichment" = c(
+                  "ORA",
+                  "GSEA"
                 )
+              ),
+              width = "100%"
+            ),
+            selectInput(
+              ns("table_extension"),
+              "File format",
+              choices = c(".xlsx", ".csv", ".tsv"),
+              selected = ".xlsx",
+              width = "100%"
+            ),
+            div(
+              style = "margin-top: 2.3rem;",
+              checkboxInput(
+                ns("include_metadata"),
+                "Include sample metadata",
+                value = FALSE
               )
             ),
-            accordion_panel(
-              title = "Define & Download Report",
-              id = ns("report"),
-              layout_columns(
-                col_widths = c(9, 3),
-                checkboxGroupInput(
-                  inputId = ns("report_section"),
-                  label = "Report Section",
-                  choices = c("Preprocessing", "PCA", "Correlation", "Rank", "Volcano", "Heatmap", "Network", "ORA", "GSEA"),
-                  inline = TRUE,
-                  selected = c("Preprocessing", "PCA", "Correlation", "Rank", "Volcano", "Heatmap", "Network", "ORA", "GSEA")
-                ),
-                downloadButton(
-                  outputId = ns("download_report"),
-                  label = "DOWNLOAD",
-                  width = "100%",
-                  class = "bg-primary mt-auto",
-                  icon = NULL
-                )
+            conditionalPanel(
+              condition = "input.include_metadata === true &&
+                          ['Filtered','Normalized','Imputed','Volcano','Heatmap']
+                          .includes(input.select_table)",
+              ns = ns,
+              selectInput(
+                ns("add_metadata"),
+                "Metadata columns",
+                choices = NULL,
+                multiple = TRUE,
+                width = "100%"
               )
+            )
+          ),
+          downloadButton(
+            ns("download_table"),
+            label = "⬇ Download table",
+            class = "btn-primary w-100"
+          )
+        )
+      ),
+      card(
+        card_header(
+          h4("📄 Generate analysis report")
+        ),
+        card_body(
+          layout_columns(
+            col_widths = c(4, 8),
+            radioButtons(
+              ns("report_preset"),
+              "Report preset",
+              choices = c(
+                "Full report" = "full",
+                "Custom" = "custom"
+              ),
+              selected = "full"
             ),
-            accordion_panel(
-              title = "Save Analysis Session",
-              id = ns("parmas"),
-              layout_columns(
-                col_widths = c(9, 3),
-                div(
-                  class = "alert alert-info",
-                  style = "white-space: pre-wrap;",
-                  role = "alert",
-                  "The analysis session with all the parameters used will be stored in a QProMS_analysis.rds file. You can reload this file into home page to continue the analysis."
-                ),
-                downloadButton(
-                  outputId = ns("download_params"),
-                  label = "DOWNLOAD",
-                  width = "100%",
-                  class = "bg-primary",
-                  icon = NULL
+            conditionalPanel(
+              condition = "input.report_preset === 'custom'",
+              ns = ns,
+              checkboxGroupInput(
+                ns("report_section"),
+                "Included sections",
+                inline = TRUE,
+                choices = list(
+                  "Preprocessing" = c("Preprocessing"),
+                  "Exploratory analysis" = c("PCA", "Correlation"),
+                  "Differential analysis" = c("Rank", "Volcano"),
+                  "Visualization" = c("Heatmap", "Network"),
+                  "Functional analysis" = c("ORA", "GSEA")
                 )
               )
+            )
+          ),
+          div(
+            class = "mt-3",
+            downloadButton(
+              ns("download_report"),
+              label = "📄 Generate report (.html)",
+              class = "btn-primary w-100"
+            ),
+            span(
+              class = "text-muted small",
+              "Report generation may take up to some minutes."
             )
           )
         )
       ),
-      div()
+      card(
+        card_header(
+          h4("💾 Save analysis session")
+        ),
+        card_body(
+          p(
+            "Save the entire analysis state, including parameters and results, ",
+            "to resume your work later."
+          ),
+          p(
+            class = "text-muted",
+            "The session will be saved as a .rds file and can be reloaded ",
+            "from the Home page."
+          ),
+          downloadButton(
+            ns("download_params"),
+            label = "💾 Save session (.rds)",
+            class = "btn-outline-primary w-100"
+          )
+        )
+      )
     )
   )
 }
+
 
 #' @export
 server <- function(id, r6) {
@@ -115,7 +175,44 @@ server <- function(id, r6) {
     
     observe({
       watch("genes")
-      updateSelectInput(inputId = "add_metadata", choices = colnames(r6$raw_data_unique), selected = NULL)
+      updateSelectInput(
+        inputId = "add_metadata",
+        choices = colnames(r6$raw_data_unique),
+        selected = NULL
+      )
+      if (!r6$with_statistics) {
+        updateCheckboxGroupInput(
+          inputId = "report_section",
+          choices = c("Preprocessing", "PCA", "Correlation", "Rank", "Network", "ORA", "GSEA"),
+          selected = c("Preprocessing", "PCA", "Correlation", "Rank", "Network", "ORA", "GSEA")
+        )
+      } else {
+        updateCheckboxGroupInput(
+          inputId = "report_section",
+          choices = c(
+            "Preprocessing",
+            "PCA",
+            "Correlation",
+            "Rank",
+            "Volcano",
+            "Heatmap",
+            "Network",
+            "ORA",
+            "GSEA"
+          ),
+          selected = c(
+            "Preprocessing",
+            "PCA",
+            "Correlation",
+            "Rank",
+            "Volcano",
+            "Heatmap",
+            "Network",
+            "ORA",
+            "GSEA"
+          )
+        )
+      }
     })
     
     output$download_table <- downloadHandler(
@@ -152,8 +249,15 @@ server <- function(id, r6) {
               r6$download_parameters(handler_file = "app/logic/QProMS_session_internal.rds", r6class = r6)
               incProgress(1/5, message = "Use only selected Section")
               Sys.sleep(1)
-              param_list <- map(params, ~ .x %in% isolate(input$report_section)) %>%
-                set_names(params)
+              if(isolate(input$report_preset) == "custom") {
+                param_list <- map(params, ~ .x %in% isolate(input$report_section)) %>%
+                  set_names(params)
+                print(param_list)
+              } else {
+                param_list <- map(params, ~ .x %in% params) %>%
+                  set_names(params)
+                print(param_list)
+              }
               incProgress(1/5, message = "Render Report", detail = "This operation can take some time..")
               quarto_render(
                 "app/logic/Report_QProMS.qmd",

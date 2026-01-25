@@ -1,6 +1,6 @@
 box::use(
-  shiny[moduleServer, NS],
-  bslib[page_fillable, layout_columns, navset_card_underline, nav_panel],
+  shiny[moduleServer, NS, observeEvent],
+  bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, sidebar, input_task_button],
   echarts4r[echarts4rOutput, renderEcharts4r],
   gargoyle[watch],
 )
@@ -8,7 +8,7 @@ box::use(
 #' @export
 ui <- function(id) {
   ns <- NS(id)
-  page_fillable(
+  page_sidebar(
     layout_columns(
       navset_card_underline(
         full_screen = TRUE, 
@@ -24,6 +24,13 @@ ui <- function(id) {
           echarts4rOutput(ns("pca_plot_3d"))
         )
       )
+    ),
+    sidebar = sidebar(
+      input_task_button(
+        id = ns("update"),
+        label = "PROCESS",
+        class = "bg-primary"
+      )
     )
   )
 }
@@ -31,16 +38,14 @@ ui <- function(id) {
 #' @export
 server <- function(id, r6) {
   moduleServer(id, function(input, output, session) {
-
-    output$pca_plot_2d <- renderEcharts4r({
-      watch("plot")
-      r6$plot_pca(view_3d = FALSE) 
-    })
     
-    output$pca_plot_3d <- renderEcharts4r({
-      watch("plot")
-      r6$plot_pca(view_3d = TRUE) 
+    observeEvent(input$update, {
+      output$pca_plot_2d <- renderEcharts4r({
+        r6$plot_pca(view_3d = FALSE) 
+      })
+      output$pca_plot_3d <- renderEcharts4r({
+        r6$plot_pca(view_3d = TRUE) 
+      })
     })
-
   })
 }

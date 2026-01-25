@@ -1,13 +1,34 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, br, actionButton, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI],
-  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button],
+  shiny[moduleServer, NS, tags, selectInput, br, actionButton, selectizeInput, updateSelectizeInput, fileInput, radioButtons, observeEvent, observe, div, icon, req, uiOutput, renderUI, updateSelectInput, removeUI, textInput],
+  bslib[page_fillable, layout_columns, layout_sidebar, tooltip, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, nav_select, input_switch, toggle_sidebar, nav_remove, input_task_button, nav_insert, layout_column_wrap],
   reactable[reactableOutput, renderReactable, reactable, colDef],
   rhandsontable[rHandsontableOutput, renderRHandsontable, hot_to_r],
-  purrr[map, set_names, imap, keep_at, flatten_chr, discard_at],
+  purrr[map, set_names, imap, keep_at, flatten_chr, discard_at, walk],
   stringr[word, str_remove],
   dplyr[`%>%`, filter, select],
   gargoyle[init, watch, trigger],
 )
+
+box::use(
+  app/view/statistics,
+  app/view/heatmap,
+)
+
+panels <- list(
+  Volcano = list(
+    target = "Rank",
+    title  = "Volcano",
+    ui     = statistics$ui,
+    ns     = "statistics"
+  ),
+  Heatmap = list(
+    target = "Volcano",
+    title  = "Heatmap",
+    ui     = heatmap$ui,
+    ns     = "heatmap"
+  )
+)
+
 
 #' @export
 ui <- function(id) {
@@ -70,14 +91,11 @@ server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
-    init("plot", "genes")
+    init("genes")
     
     observe({
       watch("session")
       if(!r6$new_session){
-        nav_remove("upload_container", "Table Check")
-        nav_remove("upload_container", "Experimental Design")
-        nav_remove("upload_container", "Experimental Design Check")
         output$raw_input_table <- renderReactable({r6$table_raw_data()})
       }
     })
@@ -134,11 +152,23 @@ server <- function(id, r6, main_session) {
                 "Select Gene Column",
                 choices = colnames(r6$raw_data)[sapply(r6$raw_data, is.character)]
               ),
-              selectInput(
+              textInput(
+                ns("intensity_pattern"),
+                "Filter intensity columns (regex or keyword)",
+                placeholder = "e.g. LFQ|Intensity|Sample_"
+              ),
+              selectizeInput(
                 ns("intensity_columns"),
-                "Select Intensity Columns",
-                colnames(r6$raw_data)[sapply(r6$raw_data, is.numeric)],
-                multiple = TRUE
+                "Intensity columns",
+                choices = NULL,
+                multiple = TRUE,
+                options = list(
+                  plugins = list("remove_button"),
+                  placeholder = "Select one or more intensity columns",
+                  maxItems = NULL,
+                  hideSelected = TRUE,
+                  dropdownParent = 'body'
+                )
               ),
               input_switch(
                 id = ns("log_transform"),
@@ -148,11 +178,13 @@ server <- function(id, r6, main_session) {
               selectInput(
                 inputId = ns("organism"),
                 label = "Organism",
-                choices = c("Homo Sapiens" = "human",
-                            "Mus Musculus" = "mouse",
-                            "Drosophila Melanogaster" = "drosophila",
-                            "Saccharomyces Cerevisiae" = "buddingyeast",
-                            "Escherichia Coli" = "ecoli"),
+                choices = c(
+                  "Homo Sapiens" = "human",
+                  "Mus Musculus" = "mouse",
+                  "Drosophila Melanogaster" = "drosophila",
+                  "Saccharomyces Cerevisiae" = "buddingyeast",
+                  "Escherichia Coli" = "ecoli"
+                ),
                 selected = "human"
               )
             )
@@ -161,8 +193,43 @@ server <- function(id, r6, main_session) {
       }
       
     })
+    
+    observeEvent(r6$raw_data, {
+      req(r6$raw_data)
+      updateSelectizeInput(
+        session,
+        "intensity_columns",
+        choices = colnames(r6$raw_data)[sapply(r6$raw_data, is.numeric)],
+        server = TRUE
+      )
+    })
+    observeEvent(input$intensity_pattern, {
+      req(r6$raw_data)
+      
+      all_numeric <- colnames(r6$raw_data)[sapply(r6$raw_data, is.numeric)]
+      
+      if (nzchar(input$intensity_pattern)) {
+        filtered <- grep(
+          input$intensity_pattern,
+          all_numeric,
+          value = TRUE,
+          ignore.case = TRUE
+        )
+      } else {
+        filtered <- all_numeric
+      }
+      
+      updateSelectizeInput(
+        session,
+        "intensity_columns",
+        choices = filtered,
+        selected = intersect(input$intensity_columns, filtered),
+        server = TRUE
+      )
+    })
+    
     observeEvent(input$confirm2, {
-      if(!is.null(r6$raw_data)) {
+      if(!is.null(r6$raw_data) & r6$new_session) {
         nav_select("upload_container", "Experimental Design")
         output$exp_design <- renderRHandsontable({
           if(r6$identify_table_status == "success") {
@@ -175,7 +242,7 @@ server <- function(id, r6, main_session) {
       }
     })
     observeEvent(input$verify, {
-      if(!is.null(r6$raw_data)) {
+      if(!is.null(r6$raw_data) & r6$new_session) {
         des <- hot_to_r(input$exp_design) %>% 
           filter(keep) %>% 
           select(-keep)
@@ -201,14 +268,19 @@ server <- function(id, r6, main_session) {
         }
         output$define_action_button <- renderUI({
           if(result$validation_status){
-            input_task_button(
-              id = ns("start"),
-              label = "START"
+            bslib::layout_column_wrap(
+              width = 1,
+              input_task_button(
+                id = ns("start"),
+                label = "START",
+                width = "100%"
+              )
             )
           } else {
             actionButton(
               inputId = ns("back"),
               label = "BACK",
+              width = "100%",
               class = "bg-primary"
             )
           }
@@ -230,10 +302,31 @@ server <- function(id, r6, main_session) {
       r6$organism <- input$organism
       r6$protein_rank_target <- r6$expdesign$label[1]
       r6$preprocessing()
+      if(is.null(r6$data)) return(NULL)
       r6$shiny_wrap_workflow()
-      trigger("plot", "genes")
+      trigger("genes")
       nav_select("top_navigation", "Preprocessing", session = main_session)
+      purrr::walk(names(panels), ~ nav_remove("top_navigation", target  = .x, session = main_session))
+      if (r6$with_statistics) {
+        purrr::walk(
+          panels,
+          ~ nav_insert(
+            "top_navigation",
+            target  = .x$target,
+            select  = FALSE,
+            session = main_session,
+            nav_panel(
+              title = .x$title,
+              class = "html-fill-item html-fill-container bslib-gap-spacing",
+              style = "--bslib-navbar-margin:0; padding:0",
+              .x$ui(ns(.x$ns))
+            )
+          )
+        )
+      } 
     })
     
+    statistics$server("statistics", r6 = r6, main_session = main_session)
+    heatmap$server("heatmap", r6 = r6, main_session = main_session)
   })
 }

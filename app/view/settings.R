@@ -19,55 +19,49 @@ palette_choices <- map(
 ui <- function(id) {
   ns <- NS(id)
   page_fillable(
-    layout_columns(
-      col_widths = c(12, -1, 10, -1, 12),
-      row_heights = c(1,10,1),
-      div(),
-      card(
-        card_header(h4(class = "text-center", "Settings")),
-        card_body(
-          layout_columns(
-            col_widths = c(-2, 8, -2, -2, 6, 2, -2, 12, -4, 4, -4),
-            gap = "2rem",
-            row_heights = c(1, 1, 1, 1),
-            palettePicker(
-              inputId = ns("palette"),
-              label = "Color Palettes",
-              choices = palette_choices,
-              selected = "D"
-            ),
-            sliderInput(
-              inputId = ns("text_sixe"),
-              label = "Plots text size",
-              min = 4,
-              max = 36,
-              value = 16,
-              step = 1,
-              width = "100%"
-            ),
-            radioButtons(
-              inputId = ns("plot_format"),
-              label = "Plot extension",
-              choices = c("svg" = "svg", "png" = "canvas"),
-              selected = "svg"
-            ),
-            div(),
-            actionButton(
-              inputId = ns("update"),
-              label = "UPDATE",
-              class = "bg-primary",
-              width = "100%"
-            )
+    card(
+      card_header(h4(class = "text-center", "Settings")),
+      card_body(
+        layout_columns(
+          col_widths = c(-2, 8, -2, -2, 6, 2, -2, 12, -4, 4, -4),
+          gap = "2rem",
+          row_heights = c(1, 1, 1, 1),
+          palettePicker(
+            inputId = ns("palette"),
+            label = "Color Palettes",
+            choices = palette_choices,
+            selected = "D"
+          ),
+          sliderInput(
+            inputId = ns("text_sixe"),
+            label = "Plots text size",
+            min = 4,
+            max = 36,
+            value = 16,
+            step = 1,
+            width = "100%"
+          ),
+          radioButtons(
+            inputId = ns("plot_format"),
+            label = "Plot extension",
+            choices = c("svg" = "svg", "png" = "canvas"),
+            selected = "svg"
+          ),
+          div(),
+          actionButton(
+            inputId = ns("update"),
+            label = "UPDATE",
+            class = "bg-primary",
+            width = "100%"
           )
         )
-      ),
-      div()
+      )
     )
   )
 }
 
 #' @export
-server <- function(id, r6) {
+server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     observe({
@@ -84,7 +78,6 @@ server <- function(id, r6) {
       r6$plot_font_size <- input$text_sixe
       if(!is.null(r6$expdesign)) {
         r6$define_colors()
-        trigger("plot")
       }
       shinyalert(
         title = "Setting Updated!",

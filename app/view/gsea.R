@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, br, sliderInput, actionButton, isolate, icon, observe, updateNumericInput, updateSliderInput, updateSelectInput, updateSelectizeInput, reactive, observeEvent, numericInput, conditionalPanel, selectizeInput],
+  shiny[moduleServer, NS, selectInput, br, sliderInput, actionButton, isolate, icon, observe, updateNumericInput, updateSliderInput, updateSelectInput, updateSelectizeInput, reactive, observeEvent, numericInput, conditionalPanel, selectizeInput, renderPlot, plotOutput],
   bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, tooltip, input_task_button],
   gargoyle[watch, trigger],
   trelliscope[trelliscopeOutput, renderTrelliscope],
@@ -22,13 +22,23 @@ ui <- function(id) {
         nav_panel(
           "Table",
           reactableOutput(ns("table"))
+        ),
+        nav_panel(
+          title = tooltip(
+            trigger = list(
+              "GSEA plot",
+              icon("info-circle")
+            ),
+            "Running ES: cumulative enrichment score along the ranked gene list; vertical bars mark gene set hits, bottom panel shows the ranking metric. Leading edge: genes up to the ES peak driving enrichment (NES > 0 top, NES < 0 bottom)."
+          ),
+          plotOutput(ns("gseaplot"))
         )
       )
     ),
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
@@ -39,8 +49,8 @@ ui <- function(id) {
           selectInput(
             inputId = ns("rank_with"),
             label = "Rank with",
-            choices = c("Fold change" = "fc", "Intensity" = "intensity"),
-            selected = "fc", 
+            choices = c("Intensity" = "intensity", "Fold change" = "fc"),
+            selected = "intensity", 
             width = "auto"
           ),
           conditionalPanel(
@@ -60,10 +70,10 @@ ui <- function(id) {
               id = ns("by_cond_input"),
               label = tooltip(
                 trigger = list(
-                  "Merge Condition",
+                  "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each condition."
+                "If TRUE, use the Intensity mean of each replicate."
               ),
               value = TRUE
             ),
@@ -77,38 +87,90 @@ ui <- function(id) {
             )
           ),
           selectInput(
-            inputId = ns("ontology_input"),
-            label = "Ontology",
+            inputId = ns("database_input"),
+            label = "Database",
             choices = c(
-              "Biological Processes" = "BP",
-              "Molecular Function" = "MF",
-              "Cellular Components" = "CC"
+              "Gene Ontology" = "GO",
+              "KEGG",
+              "WikiPathways"
             ),
-            selected = "BP"
+            selected = "GO"
+          ),
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            selectInput(
+              inputId = ns("ontology_input"),
+              label = "Ontology",
+              choices = c(
+                "Biological Processes" = "BP",
+                "Molecular Function" = "MF",
+                "Cellular Components" = "CC"
+              ),
+              selected = "BP"
+            )
           )
         ),
         accordion_panel(
           title = "Parameters",
           id = ns("params"),
-          sliderInput(
-            inputId = ns("simplify_thr"),
-            label = "Simplify threshold",
-            min = 0.1,
-            max = 1,
-            value = 1,
-            step = 0.1
+          conditionalPanel(
+            condition = "input.database_input == 'GO'",
+            ns = ns,
+            sliderInput(
+              inputId = ns("simplify_thr"),
+              label = tooltip(
+                trigger = list(
+                  "Simplify threshold",
+                  icon("info-circle")
+                ),
+                "Group similar GO descriptions into more a comprehensive description. Drag to a small value if you want to simplify more descriptions."
+              ),
+              min = 0.1,
+              max = 1,
+              value = 1,
+              step = 0.1
+            )
           ),
           numericInput(
             inputId = ns("alpha_input"),
-            label = "Alpha",
+            label = tooltip(
+              trigger = list(
+                "Alpha",
+                icon("info-circle")
+              ),
+              "pvalue adjustment Cutoff."
+            ),
             value = 0.05,
             min = 0.01,
             max = 0.05,
             step = 0.01
           ),
+          numericInput(
+            inputId = ns("minGSsize"),
+            label = "min GS size",
+            value = 10,
+            min = 1,
+            max = 100,
+            step = 1
+          ),
+          numericInput(
+            inputId = ns("maxGSsize"),
+            label = "max GS size",
+            value = 500,
+            min = 1,
+            max = 1000,
+            step = 1
+          ),
           selectInput(
             inputId = ns("truncation_input"),
-            label = "Truncation",
+            label = tooltip(
+              trigger = list(
+                "Truncation",
+                icon("info-circle")
+              ),
+              "Statistical data correction applied to the dataset."
+            ),
             choices = c(
               "BH (Default)" = "BH",
               "Bonferroni" = "bonferroni",
@@ -149,18 +211,31 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, r6) {
+server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     observe({
       watch("genes")
-      if(!is.null(r6$expdesign)) {
+      if(!is.null(r6$expdesign) & !is.null(input$by_cond_input)) {
         if(input$by_cond_input){
           ch <- unique(r6$expdesign$condition)
           updateSelectInput(inputId = "target", choices = ch, selected = ch[1])
         } else {
           updateSelectInput(inputId = "target", choices = r6$expdesign$label, selected = r6$expdesign$label[1])
         }
+      }
+      if(!r6$with_statistics) {
+        updateSelectInput(
+          inputId = "rank_with",
+          choices = c("Intensity" = "intensity"),
+          selected = "intensity"
+        )
+      } else {
+        updateSelectInput(
+          inputId = "rank_with",
+          choices = c("Intensity" = "intensity", "Fold change" = "fc"),
+          selected = "intensity"
+        )
       }
     })
     
@@ -193,9 +268,12 @@ server <- function(id, r6) {
       r6$go_gsea_rank_with <- input$rank_with
       r6$go_gsea_alpha <- input$alpha_input
       r6$go_gsea_p_adj_method <- input$truncation_input
+      r6$go_gsea_database <- input$database_input
       r6$go_gsea_term <- input$ontology_input
       r6$go_gsea_top_n <- input$show_category
       r6$go_gsea_simplify_thr <- input$simplify_thr
+      r6$go_gsea_min_gs_size <- input$minGSsize
+      r6$go_gsea_max_gs_size <- input$maxGSsize
       r6$go_gsea_plot_arrenge <- input$arrenged
      
       if(r6$go_gsea_rank_with == "fc") {
@@ -207,31 +285,44 @@ server <- function(id, r6) {
         r6$go_gsea_focus <- input$target
         r6$go_gsea_by_cond <- input$by_cond_input
       }
-
-      r6$go_gsea(
-        test = r6$go_gsea_focus,
-        rank_type = r6$go_gsea_rank_with,
-        by_condition = r6$go_gsea_by_cond,
-        ontology = r6$go_gsea_term,
-        simplify_thr = r6$go_gsea_simplify_thr,
-        alpha = r6$go_gsea_alpha,
-        p_adj_method = r6$go_gsea_p_adj_method
-      )
-      r6$print_gsea_table(r6$go_gsea_plot_arrenge)
-      trigger("plot")
+      
+      tryCatch({
+        r6$go_gsea(
+          test = r6$go_gsea_focus,
+          rank_type = r6$go_gsea_rank_with,
+          by_condition = r6$go_gsea_by_cond,
+          database = r6$go_gsea_database,
+          ontology = r6$go_gsea_term,
+          simplify_thr = r6$go_gsea_simplify_thr,
+          alpha = r6$go_gsea_alpha,
+          min_gs_size = r6$go_gsea_min_gs_size,
+          max_gs_size = r6$go_gsea_max_gs_size,
+          p_adj_method = r6$go_gsea_p_adj_method
+        )
+        r6$print_gsea_table(r6$go_gsea_plot_arrenge)
+      }, error = function(e) {
+        return(NULL)
+      })
+      output$bar_plot <- renderTrelliscope({
+        if(!is.null(r6$gsea_result_list)) {
+          r6$plot_gsea(r6$go_gsea_focus, r6$go_gsea_plot_arrenge, r6$go_gsea_top_n)
+        }
+      })
+      output$table <- renderReactable({
+        r6$reactable_interactive(table = r6$gsea_table, sel = "single")
+      })
+      gene_selected <- reactive(getReactableState("table", "selected"))
+      output$gseaplot <- renderPlot({
+        if(!is.null(r6$gsea_table)) {
+          group <- r6$gsea_table[gene_selected(),] %>%
+            pull(group)
+          highlights <- r6$gsea_table[gene_selected(),] %>%
+            pull(ID)
+          r6$plot_gseaplot(focus = group, gene_set_ID = highlights)
+        }
+      })
     })
 
-    output$bar_plot <- renderTrelliscope({
-      watch("plot")
-      if(!is.null(r6$gsea_result_list)) {
-        r6$plot_gsea(r6$go_gsea_focus, r6$go_gsea_plot_arrenge, r6$go_gsea_top_n)
-      }
-    })
-
-    output$table <- renderReactable({
-      watch("plot")
-      r6$reactable_functional_analysis(r6$gsea_table)
-    })
     
   })
 }

@@ -37,7 +37,7 @@ ui <- function(id) {
     sidebar = sidebar(
       input_task_button(
         id = ns("update"),
-        label = "UPDATE"
+        label = "PROCESS"
       ),
       accordion(
         id = ns("accordion"),
@@ -62,10 +62,10 @@ ui <- function(id) {
               id = ns("by_cond_input"),
               label = tooltip(
                 trigger = list(
-                  "Merge Condition",
+                  "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each condition."
+                "If TRUE, use the Intensity mean of each replicate."
               ),
               value = FALSE
             ),
@@ -83,7 +83,7 @@ ui <- function(id) {
                   "Selection",
                   icon("info-circle")
                 ),
-                "This selection is used for generate the network plot. Press 'UPDATE' to validate a new selection."
+                "This selection is used to generate the network plot. Press 'PROCESS' to validate a new selection."
               ),
               choices = c("From top" = "top", "From bottom" = "bot"),
               selected = "top", 
@@ -127,7 +127,13 @@ ui <- function(id) {
           ),
           selectInput(
             inputId = ns("db_source"),
-            label = "Database",
+            label = tooltip(
+              trigger = list(
+                "Database",
+                icon("info-circle")
+              ),
+              "String integrates known and predicted protein-protein interactions (grey links); CORUM focuses on curated, experimentally validated protein complexes (green links)."
+            ),
             choices = c("String" = "string", "Corum" = "corum"),
             selected = "string", 
             multiple = TRUE
@@ -138,7 +144,13 @@ ui <- function(id) {
           id = ns("params"),
           sliderInput(
             inputId = ns("score_thr"),
-            label = "Score threshold",
+            label = tooltip(
+              trigger = list(
+                "Score threshold",
+                icon("info-circle")
+              ),
+              "Cutoff value used in String algorithms to decide if two strings are similar enough or if a match is valid, filtering out low-quality or irrelevant results by setting a minimum acceptable similarity or confidence level."
+            ),
             min = 0,
             max = 0.9,
             value = 0.4,
@@ -171,7 +183,7 @@ ui <- function(id) {
                 "Subset",
                 icon("info-circle")
               ),
-              "If TRUE, display network with only selected nodes."
+              "If selected, create a new network with only selected nodes."
             ),
             value = FALSE
           )
@@ -182,17 +194,34 @@ ui <- function(id) {
 }
 
 #' @export
-server <- function(id, r6) {
+server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
     
     observe({
       watch("genes")
-      if(!is.null(r6$expdesign)) {
+      if(!is.null(r6$expdesign) & !is.null(input$by_cond_input)) {
         if(input$by_cond_input){
           updateSelectInput(inputId = "target", choices = unique(r6$expdesign$condition))
         } else {
           updateSelectInput(inputId = "target", choices = r6$expdesign$label)
         }
+      }
+      if(!r6$with_statistics) {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c("Rank" = "top_rank"),
+          selected = "top_rank"
+        )
+      } else {
+        updateSelectInput(
+          inputId = "strategy",
+          choices = c(
+            "Rank" = "top_rank",
+            "Volcano" = "univariate",
+            "Heatmap" = "multivariate"
+          ), 
+          selected = "top_rank"
+        )
       }
     })
     
@@ -242,31 +271,64 @@ server <- function(id, r6) {
         }
         focus_net <- "top_rank"
       }
-      
       if(r6$network_from_statistic == "univariate") {
         r6$network_focus_uni <- input$test_uni_input
         focus_net <- r6$network_focus_uni
       }
-      
       if(r6$network_from_statistic == "multivariate") {
         r6$network_focus_multi <- input$clusters_input
         focus_net <- r6$network_focus_multi
       }
-      
       r6$make_nodes(
         list_from = r6$network_from_statistic,
         focus = focus_net,
         direction = r6$network_uni_direction
       )
-      r6$make_edges(source = r6$pdb_database)
-      
-      trigger("plot")
-    })
-    
-    output$network_plot <- renderEcharts4r({
-      watch("plot")
-      
-      if(!is.null(r6$nodes_table)) {
+      tryCatch({
+        r6$make_edges(source = r6$pdb_database)
+      }, error = function(e) {
+        return(NULL)
+      })
+      output$network_plot <- renderEcharts4r({
+        if(!is.null(r6$nodes_table)) {
+          nodes <- r6$print_nodes(
+            isolate_nodes = isolate(input$isolate_nodes_input),
+            score_thr = r6$network_score_thr
+          )
+          if(!is.null(nodes)) {
+            highlights <- nodes[gene_selected(), ] %>% 
+              pull(gene_names)
+            fil <- isolate(input$keep_selected)
+          } else {
+            highlights <- NULL
+          }
+          
+          if(length(highlights) == 0){
+            highlights <- NULL
+            fil <- FALSE
+          }
+          r6$plot_ppi_network(
+            list_from = r6$network_from_statistic,
+            score_thr = r6$network_score_thr,
+            isolate_nodes = isolate(input$isolate_nodes_input),
+            layout = isolate(input$layout),
+            show_names = isolate(input$names_input),
+            selected = highlights,
+            filtered = fil
+          )
+        } else {
+          NULL
+        }
+      })
+      gene_selected <- reactive(getReactableState("table_nodes", "selected"))
+      output$table_nodes <- renderReactable({
+        table <- r6$print_nodes(
+          isolate_nodes = isolate(input$isolate_nodes_input),
+          score_thr = r6$network_score_thr
+        )
+        r6$reactable_network(table, TRUE)
+      })
+      output$table_edges <- renderReactable({
         nodes <- r6$print_nodes(
           isolate_nodes = isolate(input$isolate_nodes_input),
           score_thr = r6$network_score_thr
@@ -274,57 +336,13 @@ server <- function(id, r6) {
         if(!is.null(nodes)) {
           highlights <- nodes[gene_selected(), ] %>% 
             pull(gene_names)
-          fil <- isolate(input$keep_selected)
-        } else {
-          highlights <- NULL
+          table <- r6$print_edges(
+            selected_nodes = highlights,
+            score_thr = r6$network_score_thr
+          )
+          r6$reactable_network(table, FALSE)
         }
-        
-        if(length(highlights) == 0){
-          highlights <- NULL
-          fil <- FALSE
-        }
-        r6$plot_ppi_network(
-          list_from = r6$network_from_statistic,
-          score_thr = r6$network_score_thr,
-          isolate_nodes = isolate(input$isolate_nodes_input),
-          layout = isolate(input$layout),
-          show_names = isolate(input$names_input),
-          selected = highlights,
-          filtered = fil
-        )
-      } else {
-        # r6$plot_empty_message("No network to display.")
-        NULL
-      }
+      })
     })
-    
-    gene_selected <- reactive(getReactableState("table_nodes", "selected"))
-    
-    output$table_nodes <- renderReactable({
-      watch("plot")
-      table <- r6$print_nodes(
-        isolate_nodes = isolate(input$isolate_nodes_input),
-        score_thr = r6$network_score_thr
-      )
-      r6$reactable_network(table, TRUE)
-    })
-    
-    output$table_edges <- renderReactable({
-      watch("plot")
-      nodes <- r6$print_nodes(
-        isolate_nodes = isolate(input$isolate_nodes_input),
-        score_thr = r6$network_score_thr
-      )
-      if(!is.null(nodes)) {
-        highlights <- nodes[gene_selected(), ] %>% 
-          pull(gene_names)
-        table <- r6$print_edges(
-          selected_nodes = highlights,
-          score_thr = r6$network_score_thr
-        )
-        r6$reactable_network(table, FALSE)
-      }
-    })
-
   })
 }
