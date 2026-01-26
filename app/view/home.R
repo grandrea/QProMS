@@ -104,7 +104,7 @@ ui <- function(id, primary_col) {
           layout_columns(
             actionButton(
               inputId = ns("setting"),
-              label = "SETTING",
+              label = "SETTINGS",
               width = "100%",
               class = "bg-secondary"
             ),
