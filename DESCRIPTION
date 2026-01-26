@@ -38,7 +38,8 @@ Suggests:
     rlist,
     rbioapi,
     quarto,
-    viridis
+    viridis,
+    missForest
 Remotes: 
     trelliscope/trelliscope,
     YuLab-SMU/ggtree
