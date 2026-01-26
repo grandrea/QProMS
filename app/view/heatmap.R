@@ -18,7 +18,13 @@ ui <- function(id) {
         id = ns("heatmap_plots_nav"),
         full_screen = TRUE, 
         nav_panel(
-          title = "Heatmap",
+          title = tooltip(
+            trigger = list(
+              "Heatmap",
+              icon("info-circle")
+            ),
+            "The heatmap is generated with Analysis of Variance (ANOVA) test."
+          ),
           plotlyOutput(ns("heatmap_plot"))
         ), 
         nav_panel(
@@ -52,22 +58,45 @@ ui <- function(id) {
         accordion_panel(
           title = "Inputs",
           id = ns("define"),
+          selectInput(
+            inputId = ns("test_input"),
+            label = "Test type",
+            choices = "ANOVA",
+          ),
           numericInput(
             inputId = ns("n_cluster_input"),
-            label = "N° of clusters",
+            label = tooltip(
+              trigger = list(
+                "N° of clusters",
+                icon("info-circle")
+              ),
+              "The number of clusters the tree should be cut into."
+            ),
             value = 1,
             min = 1,
             step = 1
           ),
           selectInput(
             inputId = ns("clust_method"),
-            label = "HClust method",
+            label = tooltip(
+              trigger = list(
+                "HClust method",
+                icon("info-circle")
+              ),
+              "The agglomeration method to be used."
+            ),
             choices = c("complete (Default)" = "complete", "average", "ward.D2", "mcquitty"),
             selected = "complete"
           ),
           input_switch(
             id = ns("zscore_input"),
-            label = "Z-score",
+            label = tooltip(
+              trigger = list(
+                "Z-score",
+                icon("info-circle")
+              ),
+              "Plot raw abundance or Z-score normailized abundance."
+            ),
             value = TRUE
           )
         ),
@@ -76,7 +105,13 @@ ui <- function(id) {
           id = ns("params"),
           numericInput(
             inputId = ns("alpha_input_milti"),
-            label = "Alpha",
+            label = tooltip(
+              trigger = list(
+                "Alpha",
+                icon("info-circle")
+              ),
+              "pvalue adjustment Cutoff."
+            ),
             value = 0.05,
             min = 0.01,
             max = 0.05,
@@ -84,7 +119,13 @@ ui <- function(id) {
           ),
           selectInput(
             inputId = ns("truncation_input_milti"),
-            label = "Truncation",
+            label = tooltip(
+              trigger = list(
+                "Truncation",
+                icon("info-circle")
+              ),
+              "Statistical data correction applied to the dataset."
+            ),
             choices = c(
               "BH (Default)" = "BH",
               "Bonferroni" = "bonferroni",
@@ -101,7 +142,13 @@ ui <- function(id) {
           id = ns("v_params"),
           input_switch(
             id = ns("order_by_expdesing"),
-            label = "Order by expdesing",
+            label = tooltip(
+              trigger = list(
+                "Order by name",
+                icon("info-circle")
+              ),
+              "If selected, remove the column tree and order by column name."
+            ),
             value = FALSE
           )
         )

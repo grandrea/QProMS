@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, actionButton, br, selectInput, icon, div, numericInput, observe, updateSelectInput, observeEvent, req, reactive, updateNumericInput],
+  shiny[moduleServer, NS, actionButton, br, selectInput, icon, div, numericInput, observe, updateSelectInput, observeEvent, req, reactive, updateNumericInput, isolate],
   bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, sidebar, tooltip, input_switch, accordion, accordion_panel, input_task_button, update_switch],
   gargoyle[watch, trigger, init],
   reactable[reactableOutput, renderReactable, getReactableState],
@@ -17,7 +17,7 @@ ui <- function(id) {
       navset_card_underline(
         full_screen = TRUE, 
         nav_panel(
-          title = "Volcano Plot",
+          title = "Volcano/MA Plot",
           trelliscopeOutput(ns("volcano_plot"), style = "height: 100%")
         ), 
         nav_panel(
@@ -26,9 +26,8 @@ ui <- function(id) {
               "Profile Plot",
               icon("info-circle")
             ),
-            "Select genes in the table to see their Profile Plot or to see their position in the Volcano plot."
+            "Select genes from the adjacent table section to see their profile plot and their position in the volcano plot."
           ),
-          
           trelliscopeOutput(ns("profile_plot_uni"), style = "height: 100%")
         ),
         nav_panel(
@@ -62,7 +61,6 @@ ui <- function(id) {
               "Welch's T-test (Default)" = "welch",
               "Student's t-test" = "student",
               "Moderated t-test" = "limma"
-              # "Wilcoxon test" = "wilcox" # remove beacuse not work properly.
             ), 
             selected = "welch" 
           ),
@@ -77,14 +75,26 @@ ui <- function(id) {
           id = ns("params"),
           numericInput(
             inputId = ns("fc_input"),
-            label = "Fold change",
+            label = tooltip(
+              trigger = list(
+                "Fold change",
+                icon("info-circle")
+              ),
+              "Fold change Cutoff."
+            ),
             value = 1,
             min = 0,
             step = 0.5
           ),
           numericInput(
             inputId = ns("alpha_input"),
-            label = "Alpha",
+            label = tooltip(
+              trigger = list(
+                "Alpha",
+                icon("info-circle")
+              ),
+              "pvalue adjustment Cutoff."
+            ),
             value = 0.05,
             min = 0.01,
             max = 0.05,
@@ -92,7 +102,13 @@ ui <- function(id) {
           ),
           selectInput(
             inputId = ns("truncation_input"),
-            label = "Truncation",
+            label = tooltip(
+              trigger = list(
+                "Truncation",
+                icon("info-circle")
+              ),
+              "Statistical data correction applied to the dataset."
+            ),
             choices = c(
               "BH (Default)" = "BH",
               "Bonferroni" = "bonferroni",
@@ -107,14 +123,32 @@ ui <- function(id) {
         accordion_panel(
           title = "Visual Parameters",
           id = ns("v_params"),
+          selectInput(
+            inputId = ns("plot_type"),
+            label = "Plot type",
+            choices = c("Volcano", "MA"), 
+            selected = "Volcano" 
+          ),
           input_switch(
             id = ns("same_y_input"),
-            label = "Share same Y axis",
+            label = tooltip(
+              trigger = list(
+                "Share same Y axis",
+                icon("info-circle")
+              ),
+              "Set the Y axes on the same scale for all the comparisons. Only if multiple comparisons are selected in the Contrast input."
+            ),
             value = TRUE
           ),
           input_switch(
             id = ns("same_x_input"),
-            label = "Share same X axis",
+            label = tooltip(
+              trigger = list(
+                "Share same X axis",
+                icon("info-circle")
+              ),
+              "Set the X axes on the same scale for all the comparisons. Only if multiple comparisons are selected in the Contrast input."
+            ),
             value = FALSE
           )
         )
@@ -169,6 +203,7 @@ server <- function(id, r6, main_session) {
       )
       trigger("stat")
       gene_selected <- reactive(getReactableState("table_uni", "selected"))
+      if(isolate(input$plot_type) == "Volcano") {
       output$volcano_plot <- renderTrelliscope({
         if(!is.null(r6$stat_table)) {
           table <- r6$print_stat_table()
@@ -182,6 +217,21 @@ server <- function(id, r6, main_session) {
           )
         }
       })
+      } else {
+        output$volcano_plot <- renderTrelliscope({
+          if(!is.null(r6$stat_table)) {
+            table <- r6$print_stat_table()
+            highlights <- table[gene_selected(),] %>% 
+              pull(gene_names)
+            r6$plot_ma(
+              r6$contrasts,
+              highlights,
+              r6$univariate_same_x,
+              r6$univariate_same_y
+            )
+          }
+        })
+      }
       output$profile_plot_uni <- renderTrelliscope({
         if(!is.null(r6$stat_table)) {
           table <- r6$print_stat_table()

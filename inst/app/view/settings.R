@@ -19,10 +19,6 @@ palette_choices <- map(
 ui <- function(id) {
   ns <- NS(id)
   page_fillable(
-    layout_columns(
-      col_widths = c(12, -1, 10, -1, 12),
-      row_heights = c(1,10,1),
-      div(),
       card(
         card_header(h4(class = "text-center", "Settings")),
         card_body(
@@ -60,8 +56,6 @@ ui <- function(id) {
             )
           )
         )
-      ),
-      div()
     )
   )
 }

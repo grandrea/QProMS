@@ -20,7 +20,7 @@ ui <- function(id) {
               "Protein Rank Plot",
               icon("info-circle")
             ),
-            "Select protein in the table to see their position in the Protein Rank Plot."
+            "Choose proteins from the adjacent table section to see their position in the plot."
           ),
           echarts4rOutput(ns("protein_rank_plot"))
         ),

@@ -2,13 +2,14 @@ box::use(
   R6[R6Class],
   data.table[fread],
   utils[head, combn, modifyList, write.csv, write.table],
-  dplyr[`%>%`, n_distinct, group_by, summarise, n, filter, mutate, ungroup, row_number, select, across, where, all_of, na_if, left_join, rename, if_else, case_when, full_join, relocate, inner_join, distinct, count, everything, pull, arrange, slice_head, slice_tail, last_col, rename_with, ends_with, desc, rename_at, vars, bind_rows, group_map, rowwise, if_all, group_keys, sym, slice_max],
+  dplyr[`%>%`, n_distinct, group_by, summarise, n, filter, mutate, ungroup, row_number, select, across, where, all_of, na_if, left_join, rename, if_else, case_when, full_join, relocate, inner_join, distinct, count, everything, pull, arrange, slice_head, slice_tail, last_col, rename_with, ends_with, desc, rename_at, vars, bind_rows, group_map, rowwise, if_all, group_keys, sym, slice_max, c_across],
   tidyr[drop_na, pivot_longer, pivot_wider, expand_grid, unite, separate_rows, unnest_wider, nest, separate],
   purrr[map, map2, set_names, imap, keep_at, flatten_chr, reduce, map_chr, map_dbl, possibly, list_rbind, pluck, compact, flatten],
   stringr[str_detect, word, str_replace_all, str_extract, str_replace, str_split_1, str_remove, str_which, str_flatten],
   tibble[tibble, as_tibble, column_to_rownames, rownames_to_column, enframe, deframe],
   vsn[vsn2, predict],
   limma[lmFit, eBayes, topTable],
+  missForest[missForest],
   stats[sd, runif, rnorm, prcomp, cor, na.omit, t.test, p.adjust, wilcox.test, model.matrix, aov, hclust, dist, cutree, as.dendrogram, median, qt],
   rbioapi[rba_string_interactions_network],
   OmnipathR[get_complex_genes, import_omnipath_complexes],
@@ -50,7 +51,7 @@ QProMS <- R6Class(
     palette = "D",
     color_palette = NULL,
     inputs_type_lists = NULL,
-    contaminants = NULL,    
+    contaminants = NULL,
     primary_color = "#6EC1E4",
     #################################
     # parameters for data wrangling #
@@ -454,13 +455,19 @@ QProMS <- R6Class(
         org_info <- org_map[[self$organism]]
         if (is.null(org_info)) return(NULL)
         orgdb     <- org_info$orgdb
-        g_names <- bitr(
-          initial_table$Accession,
-          fromType = "UNIPROT",
-          toType = "SYMBOL",
-          OrgDb = orgdb
-        ) %>%
-          dplyr::rename(Accession = UNIPROT)
+        g_names <- tryCatch({
+          bitr(
+            initial_table$Accession,
+            fromType = "UNIPROT",
+            toType   = "SYMBOL",
+            OrgDb   = orgdb
+          ) %>%
+            dplyr::rename(Accession = UNIPROT)
+        }, error = function(e) {
+          shiny::showNotification("Organism selected non compatible with Uniprot ID.", type = "error")
+          NULL
+        })
+        if (is.null(g_names)) return(NULL)
         gene_col <- "SYMBOL"
         protein_col <- "Accession"
         required_columns <- c(gene_col, inputs_type_lists$metadata_list[[self$input_type]])
@@ -820,7 +827,6 @@ QProMS <- R6Class(
       stopifnot(nrow(self$imputed_data) == nrow(self$normalized_data))
       stopifnot(!all(is.na(self$imputed_data$intensity))) 
     },
-    
     rank_protein = function(target, by_condition, selection, n_perc) {
       if(by_condition) {
         data <- self$imputed_data %>%
@@ -1067,8 +1073,8 @@ QProMS <- R6Class(
       p <- self$normalized_data %>% 
         group_by(gene_names, condition) %>% 
         summarise(
-          mean = mean(2^intensity, na.rm = TRUE),
-          sd = sd(2^intensity, na.rm = TRUE),
+          mean = mean(if (self$log_transform) 2^intensity else intensity, na.rm = TRUE),
+          sd = sd(if (self$log_transform) 2^intensity else intensity, na.rm = TRUE),
           CV = round(sd / mean, 3)
         ) %>% 
         ungroup() %>% 
@@ -1636,11 +1642,19 @@ QProMS <- R6Class(
       conds <- str_split_1(test, "_vs_")
       cond_1 <- conds[1]
       cond_2 <- conds[2]
-      
+      mean_abundance_table <- data %>%
+        filter(condition %in% c(cond_1, cond_2)) %>%
+        pivot_wider(id_cols = "gene_names", names_from = "label", values_from = "intensity") %>%
+        rowwise() %>%
+        mutate(mean_abundance = mean(c(
+          mean(c_across(starts_with(cond_1)), na.rm = TRUE), 
+          mean(c_across(starts_with(cond_2)), na.rm = TRUE)
+        ), na.rm = TRUE)) %>% 
+        ungroup() %>%
+        select(gene_names, mean_abundance)       
       if(nrow(filter(self$expdesign, condition == cond_1)) == nrow(filter(self$expdesign, condition == cond_2))) {
-        paired_test <- FALSE
+            paired_test <- FALSE
       }
-      
       cond_order <- self$expdesign %>% 
         filter(condition == cond_2) %>% 
         pull(label)
@@ -1699,6 +1713,9 @@ QProMS <- R6Class(
           mutate(significant = abs(fold_change) >= fc & p_adj <= alpha) %>%
           rename_with(~paste0(cond_1, "_vs_", cond_2, "_", .), c("p_val", "fold_change", "p_adj", "significant"))
       }
+      stat_data <- stat_data %>% 
+        left_join(mean_abundance_table) %>% 
+        rename_with(~paste0(cond_1, "_vs_", cond_2, "_", .), c("mean_abundance"))
       return(stat_data)
     },
     stat_uni_test = function(test, fc, alpha, p_adj_method, paired_test, test_type) {
@@ -1862,7 +1879,119 @@ QProMS <- R6Class(
       }
       
       return(p)
-    },
+    },   
+    plot_ma_single = function(test, highlights_names, same_x, same_y) {
+      
+      max_y_plot <- self$stat_table %>%
+        select(ends_with("fold_change")) %>%
+        max(na.rm = TRUE) %>%
+        ceiling()
+      
+      min_y_plot <- self$stat_table %>%
+        select(ends_with("fold_change")) %>%
+        min(na.rm = TRUE) %>%
+        floor()
+      
+      min_x_plot <- self$stat_table %>%
+        select(ends_with("mean_abundance")) %>% 
+        min(na.rm = TRUE) %>%
+        floor()
+      
+      max_x_plot <- self$stat_table %>%
+        select(ends_with("mean_abundance")) %>%
+        max(na.rm = TRUE) %>%
+        ceiling()
+      
+      table <- self$stat_table %>%
+        select(gene_names, starts_with(test)) %>%
+        rename_at(vars(matches(test)), ~ str_remove(., paste0(test, "_")))
+      
+      p <- table %>%
+        mutate(color = case_when(
+          fold_change > 0 & significant ~ "#67001f",
+          fold_change < 0 & significant ~ "#053061",
+          TRUE ~ "#e9ecef"
+        )) %>%
+        mutate(
+          fold_change = round(fold_change, 3),
+          mean_abundance = round(mean_abundance, 3)
+        ) %>%
+        e_charts(mean_abundance, renderer = self$plot_format) %>%
+        e_scatter(
+          fold_change,
+          legend = FALSE,
+          bind = gene_names,
+          symbol_size = 5
+        ) %>%
+        e_tooltip(formatter = htmlwidgets::JS("
+      function(params) {
+        return('<strong>' + params.name + '</strong><br />A: ' +
+               params.value[0] + '<br />LFC: ' + params.value[1])
+      }
+    ")) %>%
+        e_add_nested("itemStyle", color) %>%
+        e_toolbox_feature(feature = c("saveAsImage", "dataZoom")) %>%
+        e_x_axis(
+          name = "Mean abundance (A)",
+          nameLocation = "center",
+          axisLabel = list(fontSize = self$plot_font_size),
+          nameTextStyle = list(
+            fontWeight = "bold",
+            fontSize = self$plot_font_size,
+            lineHeight = 4 * self$plot_font_size
+          )
+        ) %>%
+        e_y_axis(
+          name = "Log2 fold change (M)",
+          nameLocation = "center",
+          axisLabel = list(fontSize = self$plot_font_size),
+          nameTextStyle = list(
+            fontWeight = "bold",
+            fontSize = self$plot_font_size,
+            lineHeight = 6 * self$plot_font_size
+          )
+        ) %>%
+        e_grid(containLabel = TRUE) %>%
+        e_group("grp") %>%
+        e_show_loading(text = "Loading...", color = self$primary_color)
+      
+      if (highlights_names != "") {
+        for (name in str_split_1(highlights_names, ":")) {
+          highlights_name <- table %>%
+            filter(gene_names == name) %>%
+            select(
+              xAxis = mean_abundance,
+              yAxis = fold_change,
+              value = gene_names
+            ) %>% as.list()
+          
+          p <- p %>%
+            e_mark_point(
+              data = highlights_name,
+              symbol = "pin",
+              symbolSize = 50,
+              silent = TRUE,
+              label = list(color = "black", fontWeight = "normal", fontSize = 16),
+              itemStyle = list(
+                color = self$primary_color,
+                borderColor = self$primary_color,
+                borderWidth = 0.2
+              )
+            )
+        }
+      }
+      
+      if (same_x) {
+        p <- p %>%
+          e_x_axis(min = min_x_plot - 1, max = max_x_plot + 1)
+      }
+      
+      if (same_y) {
+        p <- p %>%
+          e_y_axis(min = min_y_plot - 1, max = max_y_plot + 1)
+      }
+      return(p)
+    },    
     plot_volcano = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
@@ -1885,6 +2014,34 @@ QProMS <- R6Class(
       p <- contrasts_table %>% 
         mutate(plots_panel = panel_lazy(self$plot_volcano_single)) %>% 
         as_trelliscope_df(name = "Volcano Plots",
+                          path = file.path(tr_dir, "test"),
+                          jsonp = FALSE) %>% 
+        set_default_layout(ncol = 1)
+      
+      return(p)
+    },
+    plot_ma = function(tests, gene_names_marked, all_same_x, all_same_y) {
+      
+      if(is.null(self$stat_table)){return(NULL)}
+      ## create the resouce path for trelliscope
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
+      
+      if(is.null(gene_names_marked)){
+        names <- ""
+      } else {
+        names <- paste(gene_names_marked, collapse = ":")
+      }
+      contrasts_table <- tibble(
+        test = tests,
+        highlights_names = names,
+        same_x = all_same_x,
+        same_y = all_same_y
+      )
+      p <- contrasts_table %>% 
+        mutate(plots_panel = panel_lazy(self$plot_ma_single)) %>% 
+        as_trelliscope_df(name = "MA Plots",
                           path = file.path(tr_dir, "test"),
                           jsonp = FALSE) %>% 
         set_default_layout(ncol = 1)

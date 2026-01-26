@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, br, actionButton, observeEvent, updateSelectInput, observe, isolate, icon, reactive],
+  shiny[moduleServer, NS, selectInput, br, conditionalPanel, actionButton, observeEvent, updateSelectInput, observe, isolate, icon, reactive],
   bslib[page_sidebar, layout_columns, input_task_button, navset_card_underline, nav_panel, sidebar, accordion, accordion_panel, tooltip, input_switch],
   echarts4r[echarts4rOutput, renderEcharts4r],
   trelliscope[trelliscopeOutput, renderTrelliscope],
@@ -14,6 +14,7 @@ ui <- function(id) {
   page_sidebar(
     layout_columns(
       navset_card_underline(
+        id = ns("main_nav"),
         full_screen = TRUE, 
         nav_panel(
           "Heatmap",
@@ -25,9 +26,9 @@ ui <- function(id) {
               "Scatter Plots",
               icon("info-circle")
             ),
-            "Select proteins in the table to see their position in all scatter plots."
+            "Choose proteins from the adjacent table section to see their position in the plots."
           ),
-          value = "Scatter plots",
+          value = "scatter",
           trelliscopeOutput(ns("scatter_plot"), style = "height: 100%")
         ),
         nav_panel(
@@ -54,6 +55,11 @@ ui <- function(id) {
             choices = c("Pearson" = "pearson", "Kendall" = "kendall", "Spearman" = "spearman"),
             selected = "pearson"
           ),
+          conditionalPanel(
+            condition = sprintf(
+              "input['%s'] === 'scatter'",
+              ns("main_nav")
+            ),
           selectInput(
             inputId = ns("x_filter"),
             label = "Scatter plot X",
@@ -71,6 +77,7 @@ ui <- function(id) {
         )
       )
     )
+  )
   )
 }
 
