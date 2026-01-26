@@ -38,7 +38,7 @@ ui <- function(id) {
           radioButtons(
             inputId = ns("software"),
             label = "",
-            choices = c("MaxQuant", "Proteome Discoverer (PD)"= "PD", "FragPipe", "DIA-NN", "Spectronaut", "AlphaPept"),
+            choices = c("MaxQuant", "Proteome Discoverer"= "ProteomeDiscoverer", "FragPipe", "DIA-NN", "Spectronaut", "AlphaPept"),
             inline = TRUE
           )
         )
@@ -129,7 +129,7 @@ server <- function(id, r6, main_session) {
           tags$li("Header row required"),
           tags$li("No manual modification required")
         ),
-        "PD" = tags$ul(
+        "ProteomeDiscoverer" = tags$ul(
           tags$li("Format: .txt"),
           tags$li("Header row required"),
           tags$li("No manual modification required")
@@ -191,7 +191,7 @@ server <- function(id, r6, main_session) {
           tags$li("Peptides, Unique Peptides and Razor + Unique Peptides columns are used for QC filtering"),
           tags$li("Reverse Potential contaminant and Only identified by site columns are used for QC filtering")
         ),
-        "PD" = tags$ul(
+        "ProteomeDiscoverer" = tags$ul(
           tags$li("Support for Abundance, and Abundances (Normalized) intensity values"),
           tags$li("Peptides, Unique Peptides and Razor Peptides columns are used for QC filtering")
         ),

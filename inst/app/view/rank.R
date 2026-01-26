@@ -49,7 +49,7 @@ ui <- function(id) {
                 "Merge Replicate",
                 icon("info-circle")
               ),
-              "If TRUE, use the Intensity mean of each replicate."
+              "If TRUE, use the intensity mean of each protein per condition."
             ),
             value = FALSE
           ),

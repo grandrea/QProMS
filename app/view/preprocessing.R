@@ -232,7 +232,7 @@ ui <- function(id) {
                 "Maximum number of iterations unless the stopping criterion is met earlier (maxiter)."
               ),
               min = 1,
-              max = 5,
+              max = 20,
               value = 1,
               step = 1
             ),
@@ -246,7 +246,7 @@ ui <- function(id) {
                 "Number of trees to grow in each per-variable forest (ntree)."
               ),
               min = 10,
-              max = 50,
+              max = 100,
               value = 10,
               step = 10
             ),
@@ -288,7 +288,7 @@ server <- function(id, r6) {
         }
       })
       if(!is.null(r6$input_type)) {
-        if(!r6$input_type %in% c("MaxQuant", "PD")) {
+        if(!r6$input_type %in% c("MaxQuant", "ProteomeDiscoverer")) {
           accordion_panel_remove("accordion", "Subset by Peptides", session = session)
         }
         if(r6$input_type != "MaxQuant") {

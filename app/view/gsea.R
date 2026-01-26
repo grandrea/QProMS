@@ -49,12 +49,12 @@ ui <- function(id) {
           selectInput(
             inputId = ns("rank_with"),
             label = "Rank with",
-            choices = c("Intensity" = "intensity", "Fold change" = "fc"),
+            choices = c("Intensity" = "intensity", "Fold change" = "fc", "-log10 p-value" = "p_val"),
             selected = "intensity", 
             width = "auto"
           ),
           conditionalPanel(
-            condition = "input.rank_with == 'fc'",
+            condition = "input.rank_with == 'fc' || input.rank_with == 'p_val'",
             ns = ns,
             selectInput(
               inputId = ns("volcano_input"),
@@ -73,7 +73,7 @@ ui <- function(id) {
                   "Merge Replicate",
                   icon("info-circle")
                 ),
-                "If TRUE, use the Intensity mean of each replicate."
+                "If TRUE, use the intensity mean of each protein per condition."
               ),
               value = TRUE
             ),
@@ -233,7 +233,7 @@ server <- function(id, r6, main_session) {
       } else {
         updateSelectInput(
           inputId = "rank_with",
-          choices = c("Intensity" = "intensity", "Fold change" = "fc"),
+          choices = c("Intensity" = "intensity", "Fold change" = "fc", "-log10 p-value" = "p_val"),
           selected = "intensity"
         )
       }
@@ -276,7 +276,7 @@ server <- function(id, r6, main_session) {
       r6$go_gsea_max_gs_size <- input$maxGSsize
       r6$go_gsea_plot_arrenge <- input$arrenged
      
-      if(r6$go_gsea_rank_with == "fc") {
+      if(r6$go_gsea_rank_with %in% c("fc", "p_val")) {
         r6$go_gsea_focus <- input$volcano_input
         r6$go_gsea_by_cond <- FALSE
       }

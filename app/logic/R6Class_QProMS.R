@@ -22,6 +22,7 @@ box::use(
   trelliscope[panel_lazy, as_trelliscope_df, set_default_layout, add_trelliscope_resource_path],
   heatmaply[heatmaply],
   UpSetR[upset],
+  ggplot2[ggplot, theme_void, aes, geom_text, xlab],
   plotly[plotly_empty, config, layout],
   rlist[list.save, list.load],
   openxlsx[createStyle, createWorkbook, addWorksheet, writeDataTable, setColWidths, addStyle, saveWorkbook],
@@ -437,7 +438,7 @@ QProMS <- R6Class(
           drop_na(all_of(gene_col)) %>% 
           mutate(!!gene_col := str_extract(.data[[gene_col]], "[^;]*")) %>% 
           mutate(!!gene_col := make.unique(.data[[gene_col]], sep = "_"))
-      } else if (self$input_type == "PD") {
+      } else if (self$input_type == "ProteomeDiscoverer") {
         org_map <- inputs_type_lists$org_map
         org_info <- org_map[[self$organism]]
         if (is.null(org_info)) return(NULL)
@@ -546,7 +547,7 @@ QProMS <- R6Class(
           }
       }
       
-      if(self$input_type == "PD") {
+      if(self$input_type == "ProteomeDiscoverer") {
         filtered_data <- data %>%
           {if (pep_filter == "peptides") 
             filter(., `# Peptides` >= pep_thr)
@@ -849,7 +850,7 @@ QProMS <- R6Class(
         valid_val_filter = self$valid_val_filter,
         valid_val_thr = self$valid_val_thr
       )
-      if(self$input_type %in% c("MaxQuant", "PD")) {
+      if(self$input_type %in% c("MaxQuant", "ProteomeDiscoverer")) {
         self$subset_peptides(
           pep_filter = self$pep_filter,
           pep_thr = self$pep_thr
@@ -2912,16 +2913,21 @@ QProMS <- R6Class(
     go_gsea_rank_vector = function(test, rank, cond, db, org_db) {
       if(is.null(test)){return(NULL)}
       if (rank == "fc") {
-        cond_1 <- str_split_1(test, "_vs_")[1]
-        cond_2 <- str_split_1(test, "_vs_")[2]
-        gsea_vec <- self$imputed_data %>%
-          filter(condition %in% c(cond_1, cond_2)) %>%
-          group_by(gene_names, condition) %>%
-          summarise(mean = mean(intensity), .groups = "drop") %>%
-          pivot_wider(names_from = condition, values_from = mean) %>%
-          mutate(fold_change = get(cond_1) - get(cond_2)) %>%
-          arrange(desc(fold_change)) %>%
-          select(gene_names, score = fold_change) 
+        fc <- paste0(test, "_fold_change")
+        gsea_vec <- self$stat_table %>%
+          select(all_of(c("gene_names", fc))) %>% 
+          arrange(desc(!!sym(fc))) %>% 
+          select(gene_names, score = !!sym(fc))
+      } else if (rank == "p_val") {
+        p_val <- paste0(test, "_p_val")
+        fc <- paste0(test, "_fold_change")
+        gsea_vec <- self$stat_table %>%
+          select(all_of(c("gene_names", p_val, fc))) %>% 
+          mutate(across(ends_with(c("p_val")), ~ -log10(.))) %>%
+          mutate(across(ends_with(c("fold_change")), ~ sign(.))) %>%
+          mutate(score = !!sym(p_val) * !!sym(fc)) %>% 
+          arrange(desc(score)) %>%
+          select(gene_names, score)
       } else {
         if (cond) {
           gsea_vec <- self$imputed_data %>%
@@ -3141,7 +3147,12 @@ QProMS <- R6Class(
       return(p)
     },
     plot_gseaplot = function(focus, gene_set_ID) {
-      if(is.null(self$gsea_table) || is.null(focus) || length(gene_set_ID) == 0){return(NULL)}
+      if(is.null(self$gsea_table) || is.null(focus) || length(gene_set_ID) == 0){return(
+        ggplot() +
+          theme_void() +
+          geom_text(aes(0,0,label='Select a term in the table.'), size = 16) +
+          xlab(NULL)
+      )}
       data <- self$gsea_table %>%  
         filter(group == focus) 
       if (nrow(data) == 0) {
