@@ -21,7 +21,7 @@ metadata_list <- list(
   ),
   "DIA-NN" = c("Genes", "Protein.Ids"),
   "Spectronaut" = c("PG.Genes", "PG.ProteinGroups"),
-  "PD" = c("Accession", "# Peptides", "# Unique Peptides", "# Razor Peptides"),
+  "ProteomeDiscoverer" = c("Accession", "# Peptides", "# Unique Peptides", "# Razor Peptides"),
   "AlphaPept" = "V1"
 )
 
@@ -31,7 +31,7 @@ intensity_list <- list(
   "MaxQuant" = c("LFQ intensity ", "iBAQ ", "Intensity "),
   "DIA-NN" = c(".mzML", ".raw"),
   "Spectronaut" = c("PG.Quantity", "PG.MS1Quantity", "PG.MS2Quantity"),
-  "PD" = c("Abundance:", "Abundances \\(Normalized\\):"),
+  "ProteomeDiscoverer" = c("Abundance:", "Abundances \\(Normalized\\):"),
   "AlphaPept" = "_LFQ"
 )
 
