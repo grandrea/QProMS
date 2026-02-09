@@ -3209,7 +3209,7 @@ QProMS <- R6Class(
         "Normalized" = self$print_table(self$normalized_data, df = TRUE),
         "Imputed" = self$print_table(self$imputed_data, df = TRUE),
         "Ranked" = self$print_rank_table(),
-        "Volcanos" = self$print_stat_table(),
+        "Volcano" = self$print_stat_table(),
         "Heatmap" = self$print_anova_table(),
         "Nodes" = self$print_nodes(isolate_nodes = FALSE, score_thr = 0),
         "Edges" = self$print_edges(selected_nodes = NULL, score_thr = 0),
