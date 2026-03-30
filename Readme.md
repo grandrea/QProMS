@@ -94,11 +94,21 @@ QProMS automatically identifies the following input formats:
 | Software | Summary |
 |----------|---------|
 | MaxQuant | Detected from required metadata columns and supported LFQ, iBAQ, or Intensity patterns. |
-| ProteomeDiscoverer | Detected from accession and peptide-count metadata together with supported Abundance patterns. |
+| ProteomeDiscoverer | Detected from accession and peptide-count metadata together with supported Abundance patterns. After upload, the intensity column type still needs to be selected in the interface. |
 | FragPipe | Detected from `Gene` and `Protein ID` metadata together with `MaxLFQ Intensity` or `Intensity` columns. |
 | DIA-NN | Detected from `Genes` and `Protein.Ids` metadata together with sample columns matching `.mzML` or `.raw`. |
 | Spectronaut | Detected from `PG.Genes` and `PG.ProteinGroups` metadata together with `PG.Quantity`, `PG.MS1Quantity`, or `PG.MS2Quantity`. |
 | AlphaPept | Detected from the `V1` annotation column together with `_LFQ` intensity columns. |
+
+### ProteomeDiscoverer input
+
+ProteomeDiscoverer tables are supported through automatic table identification, but QProMS still asks you to choose the intensity column type after upload. In practice, the workflow is:
+
+1. Upload the ProteomeDiscoverer table in `Home`.
+2. Open `Design` and let QProMS identify the table.
+3. In `Table Check`, choose the intensity type detected in your export, for example `Abundance:` or `Abundances (Normalized):`.
+4. Select the organism.
+5. Continue to `Make Design Table`.
 
 If automatic identification does not succeed, QProMS can work with custom tables after manual selection of:
 
@@ -136,6 +146,25 @@ Supported intensity column patterns are:
 | DIA-NN | `.mzML`, `.raw` |
 | Spectronaut | `PG.Quantity`, `PG.MS1Quantity`, `PG.MS2Quantity` |
 | AlphaPept | `_LFQ` |
+
+### Regex-based column selection
+
+When a table is not identified automatically, QProMS provides a manual column-selection workflow.
+
+In this mode, you can:
+
+1. choose the gene or protein annotation column,
+2. type a regex or keyword into `Filter intensity columns (regex or keyword)`,
+3. review the filtered list of numeric columns,
+4. select the columns that should be used as intensities.
+
+This filter is helpful when sample columns share a common naming pattern. For example:
+
+- `LFQ|Intensity` matches columns containing either `LFQ` or `Intensity`
+- `Sample_` matches columns whose names contain `Sample_`
+- `Abundance:` matches ProteomeDiscoverer abundance-style columns
+
+After filtering, you still confirm the exact intensity columns manually before continuing.
 
 After clicking `Make Design Table`, the experimental design table is created. The main columns are:
 
