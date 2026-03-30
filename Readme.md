@@ -187,6 +187,8 @@ The `Preprocessing` page combines filtering, normalization, imputation, and QC v
 - imputation settings,
 - processed tables and QC views.
 
+All preprocessing choices propagate through the downstream workflow. This means that filtering, normalization, and imputation settings affect later pages such as `PCA`, `Correlation`, `Rank`, `Volcano`, `Heatmap`, `ORA`, and `GSEA`.
+
 The visualization panels include:
 
 - protein counts,
@@ -198,6 +200,28 @@ The visualization panels include:
 - imputed value distribution,
 - processed table.
 
+Protein filtering can be controlled by valid values in three ways:
+
+- `In at least one group` keeps proteins observed above the threshold in at least one condition.
+- `In each group` keeps proteins observed above the threshold in every condition.
+- `In total` keeps proteins based on overall data completeness across the full dataset.
+
+Normalization can be switched between `None` and `VSN`. Variance stabilizing normalization (VSN) is useful when you want intensity values to be made more comparable across samples while reducing mean-variance dependence.
+
+Search-engine-specific filters are exposed when the required metadata are present:
+
+- For `MaxQuant`, QProMS can filter by peptide count and can remove `Reverse`, `Potential contaminant`, and `Only identified by site` entries.
+- For `ProteomeDiscoverer`, peptide-count-based filtering is available when the peptide metadata columns are present.
+- For `FragPipe`, contaminant handling is based on the contaminant list used by the app, reflecting the FragPipe/Philosopher-style contaminant handling workflow.
+
+For MaxQuant, these contaminant-related switches correspond to the standard MaxQuant annotation columns:
+
+- `Reverse` removes reverse-sequence decoy identifications.
+- `Potential contaminant` removes proteins flagged as contaminants.
+- `Only identified by site` removes entries supported only by site evidence rather than standard protein-group identification.
+
+For FragPipe, contaminants are filtered against the contaminant list bundled with QProMS, matching the idea of contaminant handling used in FragPipe and Philosopher workflows.
+
 ### Imputation
 
 QProMS supports:
@@ -207,7 +231,11 @@ QProMS supports:
 - `missForest` imputation,
 - no imputation.
 
-Mixed imputation separates missing-at-random and missing-not-at-random values. Perseus-style imputation uses a down-shifted Gaussian distribution controlled by shift and scale parameters. `missForest` uses iterative random-forest imputation and exposes the number of iterations and trees.
+Mixed imputation separates missing-at-random (MAR) and missing-not-at-random (MNAR) values. In practice, values missing from only one replicate inside a condition are treated as MAR, while proteins completely missing from a condition are treated as MNAR.
+
+Perseus-style imputation replaces missing values by sampling from a down-shifted Gaussian distribution. The `Down shift` parameter controls how far the imputed distribution is moved below the observed data, and `Scale` controls the width of that imputed distribution. This approach follows the Perseus-style missing-value workflow described in the original Perseus documentation: [coxdocs.org](http://www.coxdocs.org/doku.php?id=perseus:user:activities:matrixprocessing:imputation:replacemissingfromgaussian).
+
+`missForest` uses iterative random-forest imputation and exposes the number of iterations and trees. This approach is based on Stekhoven and Buhlmann, 2012: [missForest paper](https://academic.oup.com/bioinformatics/article/28/1/112/219101).
 
 A common workflow is to begin with the default mixed imputation, inspect the missing-data and imputed-distribution panels, and then compare against Perseus or `missForest` if needed.
 
@@ -218,7 +246,7 @@ The `PCA` page provides:
 - a 2D PCA plot,
 - a 3D PCA plot.
 
-These views are used to inspect sample clustering and separation between conditions.
+These plots are useful as quality control to ensure that replicas cluster with each other and separate across different experimental conditions, meaning that much of the variance is associated with the biological or experimental grouping of interest.
 
 ## Correlation
 
@@ -273,9 +301,34 @@ Three test types are available:
 
 - `Welch's t-test` is the default choice for two-group comparisons and does not assume equal variance between groups.
 - `Student's t-test` assumes equal variance between the two groups and is most appropriate when that assumption is reasonable.
-- `Moderated t-test (limma)` borrows information across proteins to stabilize variance estimates and can be a good choice when replicate numbers are limited.
+- `Moderated t-test (limma)` borrows information across proteins to stabilize variance estimates and can be a good choice when replicate numbers are limited. For background on limma, see Ritchie et al., 2015: [Nucleic Acids Research](https://academic.oup.com/nar/article/43/7/e47/2414268).
 
-The `Paired` option is available for matched designs. Fold change, alpha, and multiple-testing correction determine which proteins are marked as significant in the volcano or MA plot.
+The `Paired` option is off by default but can be toggled if a paired test is to be performed. This is desirable if the comparison is between two samples that are correlated.
+
+`Fold change` is the minimum log2 fold change required for a protein to be marked as significant.
+
+`Truncation` controls how p-values are adjusted for multiple testing. The available methods include:
+
+- `BH`, the default Benjamini-Hochberg false discovery rate correction;
+- `Bonferroni`, `Holm`, `Hochberg`, and `Hommel`, which are more conservative family-wise error control methods;
+- `BY`, the Benjamini-Yekutieli correction for dependence-aware FDR control;
+- `None`, which leaves raw p-values unadjusted.
+
+Together, fold change, alpha, and truncation determine which proteins are marked as significant in the volcano or MA plot.
+
+### Volcano plot versus MA plot
+
+The `Plot type` control lets you switch between a volcano plot and an MA plot using the same statistical results.
+
+- In the `Volcano` plot, the x-axis shows log2 fold change and the y-axis shows `-log10(p-value)`. This view emphasizes both effect size and statistical significance.
+- In the `MA` plot, the x-axis shows mean abundance (`A`) and the y-axis shows log2 fold change (`M`). This view is useful for checking whether fold changes depend on signal intensity or whether low-abundance proteins behave differently from high-abundance proteins.
+
+In QProMS, the MA plot is generated from the same differential-analysis table used for the volcano plot. For each protein, the app computes:
+
+- `M` as the log2 fold change between the two groups being compared;
+- `A` as the mean abundance across the two groups in that comparison.
+
+The same significance calls and highlighting logic are reused in both views, so switching plot type changes the visual representation of the result, not the underlying test.
 
 ### Highlighting proteins and showing profile plots
 
@@ -314,6 +367,8 @@ After selecting significant proteins, QProMS builds a protein-by-sample matrix a
 - `mcquitty`
 
 The row dendrogram is cut into the selected number of clusters, and these clusters are labelled as `cluster_1`, `cluster_2`, and so on. If the `Z-score` option is enabled, each protein profile is scaled before clustering so that the heatmap emphasizes relative patterns across samples rather than absolute abundance.
+
+When `Z-score` is enabled, the heatmap displays row-scaled abundance patterns, making it easier to compare relative changes across samples for proteins with very different overall intensities. When `Z-score` is disabled, the heatmap displays the raw abundance values that enter the ANOVA-derived matrix.
 
 ### Showing proteins in the protein profile panel
 
@@ -372,6 +427,15 @@ The `Background` option controls which universe is used for the enrichment test.
 
 Including background is useful when you want enrichment to be interpreted relative to the proteins detected in your experiment rather than relative to the full organism-wide annotation space.
 
+The ORA bar plot can be arranged by:
+
+- fold enrichment,
+- raw p-value,
+- adjusted p-value,
+- count.
+
+This makes it possible to emphasize effect size, statistical significance, or the size of the contributing protein set depending on the question you are asking.
+
 ## Geneset enrichment analysis (GSEA)
 
 The `GSEA` page performs enrichment analysis using ranked protein lists. Ranking can be based on:
@@ -389,6 +453,29 @@ Supported databases are:
 The page includes ontology selection for GO, simplify threshold, alpha, multiple-testing correction, bar plots, GSEA plots, and result tables.
 
 Use `GSEA` when you want to analyse a ranked list rather than a predefined hit list.
+
+The GSEA bar plot can be arranged by:
+
+- normalized enrichment score (`NES`),
+- raw p-value,
+- adjusted p-value,
+- set size.
+
+This allows you to view the results either in terms of effect direction and magnitude (`NES`) or in terms of statistical support.
+
+### Interpreting the GSEA enrichment plot
+
+In addition to the summary bar chart, QProMS also generates a GSEA enrichment plot for the selected gene set. This plot is useful for understanding where the enrichment signal comes from along the ranked protein list.
+
+The plot can be read in three parts:
+
+- the running enrichment score curve shows how the enrichment score accumulates as you move through the ranked list;
+- the vertical tick marks indicate where members of the selected gene set appear in that ranked list;
+- the bottom ranking panel reflects the ranking metric used for the analysis.
+
+The highest positive peak or lowest negative trough of the running curve corresponds to the enrichment score for that gene set. If the main peak is near the top of the ranked list and the enrichment score is positive, the gene set is associated with proteins enriched toward the top of the ranking. If the main trough is negative and located toward the bottom, the gene set is associated with proteins enriched toward the bottom of the ranking.
+
+The leading-edge subset corresponds to the genes or proteins that contribute most strongly to the enrichment signal around that peak or trough. In practice, this plot complements the bar chart by showing not just whether a pathway is enriched, but also where the contributing members fall within the ranked list. A useful interpretation guide is available here: [MetwareBio GSEA guide](https://www.metwarebio.com/gsea-enrichment-analysis-guide/).
 
 ## Choosing analysis inputs
 
