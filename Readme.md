@@ -201,6 +201,15 @@ The `Correlation` page provides:
 
 Users can choose Pearson, Spearman, or Kendall correlation and filter scatter plots by sample selection.
 
+### Highlighting proteins in scatter plots
+
+The `Table` panel is linked to the scatter-plot view.
+
+- Select one or more proteins in the table.
+- Open the scatter-plot panel to see those proteins highlighted across the selected pairwise comparisons.
+
+This is useful when you want to inspect how specific proteins behave across samples while keeping the full correlation structure in view.
+
 ## Rank
 
 The `Rank` page visualizes protein abundance ranking. It includes:
@@ -229,6 +238,25 @@ When statistical analysis is available, the `Volcano` page is added to the workf
 - profile plots,
 - interactive result table.
 
+### Choosing a statistical test
+
+Three test types are available:
+
+- `Welch's t-test` is the default choice for two-group comparisons and does not assume equal variance between groups.
+- `Student's t-test` assumes equal variance between the two groups and is most appropriate when that assumption is reasonable.
+- `Moderated t-test (limma)` borrows information across proteins to stabilize variance estimates and can be a good choice when replicate numbers are limited.
+
+The `Paired` option is available for matched designs. Fold change, alpha, and multiple-testing correction determine which proteins are marked as significant in the volcano or MA plot.
+
+### Highlighting proteins and showing profile plots
+
+The `Table` panel is linked to the volcano and profile views.
+
+- Select one or more proteins in the results table to highlight them on the volcano or MA plot.
+- The same table selection is also used to populate the `Profile Plot` panel.
+
+This makes it easy to move from a significant hit in the table to its abundance pattern across the compared groups.
+
 ## Heatmap
 
 When statistical analysis is available, the `Heatmap` page is added to the workflow. It provides:
@@ -240,6 +268,32 @@ When statistical analysis is available, the `Heatmap` page is added to the workf
 - cluster profile plots,
 - protein profile plot,
 - interactive table.
+
+### How proteins are selected for the heatmap
+
+The heatmap is based on an ANOVA test across conditions. Proteins are first tested for differences in abundance across the experimental groups, and p-values are adjusted using the selected multiple-testing correction method.
+
+Proteins with adjusted p-values below the selected alpha threshold are marked as significant and form the matrix used for clustering and heatmap visualization. Proteins that do not pass this threshold remain in the table and are labelled as `not_defined`, but they are not part of the clustered heatmap matrix.
+
+### How clustering is done
+
+After selecting significant proteins, QProMS builds a protein-by-sample matrix and clusters it with hierarchical clustering using the method chosen in the interface. Available methods include:
+
+- `complete`
+- `average`
+- `ward.D2`
+- `mcquitty`
+
+The row dendrogram is cut into the selected number of clusters, and these clusters are labelled as `cluster_1`, `cluster_2`, and so on. If the `Z-score` option is enabled, each protein profile is scaled before clustering so that the heatmap emphasizes relative patterns across samples rather than absolute abundance.
+
+### Showing proteins in the protein profile panel
+
+The `Table` panel is linked to the `Protein Profile` panel.
+
+- Select one or more proteins in the heatmap table.
+- The selected proteins are then displayed in the protein profile view, together with their assigned cluster.
+
+The `Cluster Profile` panel shows the aggregate profile of each cluster, while the `Protein Profile` panel focuses on selected individual proteins.
 
 ## Network
 
@@ -280,6 +334,15 @@ The page includes ontology selection for GO, simplify threshold, background sele
 
 Use `ORA` when you already have a selected subset of proteins, for example top-ranked proteins, volcano hits, heatmap clusters, or a manually curated list.
 
+### What "Include background" means
+
+The `Background` option controls which universe is used for the enrichment test.
+
+- If background is not included, enrichment is tested against the full annotation universe for the selected organism.
+- If background is included, enrichment is tested against the proteins available in the corresponding QProMS result set, for example the proteins present in the statistical table, heatmap table, or rank-based selection context.
+
+Including background is useful when you want enrichment to be interpreted relative to the proteins detected in your experiment rather than relative to the full organism-wide annotation space.
+
 ## Geneset enrichment analysis (GSEA)
 
 The `GSEA` page performs enrichment analysis using ranked protein lists. Ranking can be based on:
@@ -304,27 +367,41 @@ QProMS lets you reuse results from earlier steps as inputs for downstream functi
 
 ### Using Rank as input
 
-In the `Rank` tab, you can choose:
+In the `Rank` tab, you first define a ranked protein list by choosing:
 
 - whether ranking should be based on individual samples or merged conditions,
 - which sample or condition to rank,
 - whether to take proteins from the top or bottom of the ranking,
 - the percentage of proteins to include.
 
-The same rank-based settings can then be used as input in:
+After pressing `PROCESS`, QProMS stores that ranked subset as the active rank-based selection. You do not need to re-select the proteins manually in downstream tabs. Instead, you can open another tab and choose `Rank` under `Inputs From`.
+
+That rank-based selection can then be used in:
 
 - `Network`,
 - `ORA`.
 
-This makes it possible to select the top N% of proteins from a chosen sample or condition and use that subset directly for network reconstruction or over-representation analysis.
+In practice, this means:
+
+- in `Network`, choosing `Rank` will build a protein-protein interaction network from the ranked subset defined in the `Rank` tab;
+- in `ORA`, choosing `Rank` will test that same ranked subset for functional enrichment.
+
+This is the main way to take the top N% or bottom N% of proteins from a sample or condition and pass them directly into downstream functional analysis.
 
 ### Using Volcano as input
 
 When statistical analysis is available, `Volcano` results can be reused downstream.
 
-- `Network` accepts one or more contrasts and lets you choose `Up` and/or `Down` directions.
-- `ORA` accepts volcano-derived inputs in the form of `contrast_up` and `contrast_down`.
-- `GSEA` can rank proteins by fold change or `-log10(p-value)` from selected volcano contrasts.
+The `Volcano` tab defines proteins through contrasts and significance filtering. Once a contrast has been processed, downstream tabs can reuse those results.
+
+- `Network` accepts one or more contrasts and lets you choose `Up` and/or `Down` directions. It then builds a network from the proteins significantly changing in those selected directions.
+- `ORA` accepts volcano-derived inputs in the form of `contrast_up` and `contrast_down`. This lets you test enriched proteins and depleted proteins separately.
+- `GSEA` can rank proteins by fold change or `-log10(p-value)` from selected volcano contrasts, so it uses the whole ranked result rather than only the significant subset.
+
+The practical distinction is:
+
+- `Network` and `ORA` use volcano results as selected protein sets;
+- `GSEA` uses volcano results as ranked protein lists.
 
 ### Using Heatmap as input
 
@@ -344,7 +421,8 @@ In practice, a simple analysis path is:
 1. Use `Rank` to choose a sample or condition and define the top or bottom percentage.
 2. Open `Network` to visualize interactions among those proteins.
 3. Open `ORA` to test whether that same subset is enriched for pathways or functions.
-4. Use `GSEA` when you want to work from a full ranked list instead of a selected subset.
+4. Use `Volcano` when you want contrast-based hit lists or contrast-based ranking.
+5. Use `GSEA` when you want to work from a full ranked list instead of a selected subset.
 
 ## Databases
 
