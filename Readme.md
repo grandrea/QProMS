@@ -2,6 +2,8 @@
 
 QProMS is a Shiny app and R package for quantitative proteomics analysis. It supports dataset import, experimental design setup, preprocessing, exploratory analysis, ranking, differential analysis when available, network and enrichment analysis, interactive HTML reporting, and session restore.
 
+The app can be accessed [here](https://bioserver.ieo.it/shiny/app/qproms) or run locally.
+
 ## Table of contents
 
 - [Installation](#installation)
@@ -233,7 +235,7 @@ QProMS supports:
 
 Mixed imputation separates missing-at-random (MAR) and missing-not-at-random (MNAR) values. In practice, values missing from only one replicate inside a condition are treated as MAR, while proteins completely missing from a condition are treated as MNAR.
 
-Perseus-style imputation replaces missing values by sampling from a down-shifted Gaussian distribution. The `Down shift` parameter controls how far the imputed distribution is moved below the observed data, and `Scale` controls the width of that imputed distribution. This approach follows the Perseus-style missing-value workflow described in the original Perseus documentation: [coxdocs.org](http://www.coxdocs.org/doku.php?id=perseus:user:activities:matrixprocessing:imputation:replacemissingfromgaussian).
+Perseus-style imputation replaces missing values by sampling from a down-shifted Gaussian distribution. The `Down shift` parameter controls how far the imputed distribution is moved below the observed data, and `Scale` controls the width of that imputed distribution. This approach follows the Perseus-style missing-value workflow described in the original Perseus documentation: [coxdocs.org](https://cox-labs.github.io/coxdocs/replacemissingfromgaussian.html).
 
 `missForest` uses iterative random-forest imputation and exposes the number of iterations and trees. This approach is based on Stekhoven and Buhlmann, 2012: [missForest paper](https://academic.oup.com/bioinformatics/article/28/1/112/219101).
 
