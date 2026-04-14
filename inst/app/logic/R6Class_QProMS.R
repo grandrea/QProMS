@@ -822,6 +822,9 @@ QProMS <- R6Class(
       # -----------------------------
       else {
         self$is_imp <- FALSE
+        self$is_mixed <- FALSE
+        self$imputed_data <- self$normalized_data %>%
+          mutate(imputed = FALSE)
       }
   
       
@@ -829,8 +832,11 @@ QProMS <- R6Class(
       stopifnot(!all(is.na(self$imputed_data$intensity))) 
     },
     rank_protein = function(target, by_condition, selection, n_perc) {
+      data_source <- if (self$is_imp) self$imputed_data else self$normalized_data
+      if(is.null(data_source)){return(NULL)}
+      
       if(by_condition) {
-        data <- self$imputed_data %>%
+        data <- data_source %>%
           filter(condition == target) %>%
           group_by(gene_names) %>%
           summarise(mean_intenisty = mean(intensity)) %>%
@@ -840,7 +846,7 @@ QProMS <- R6Class(
           rename(intensity = mean_intenisty) %>% 
           select(gene_names, intensity, rank)
       } else {
-        data <- self$imputed_data %>%
+        data <- data_source %>%
           filter(label == target) %>%
           arrange(-intensity) %>%
           mutate(rank = rank(-intensity)) %>% 
