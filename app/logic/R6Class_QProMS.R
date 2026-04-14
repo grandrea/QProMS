@@ -910,14 +910,6 @@ QProMS <- R6Class(
         )
       return(t)
     },
-    get_trelliscope_path = function(name) {
-      root_dir <- file.path(tempdir(), "qproms_trelliscope")
-      dir.create(root_dir, showWarnings = FALSE, recursive = TRUE)
-      add_trelliscope_resource_path("trelliscope", root_dir)
-      plot_dir <- file.path(root_dir, name)
-      dir.create(plot_dir, showWarnings = FALSE, recursive = TRUE)
-      return(plot_dir)
-    },
     plot_empty_message = function(message) {
       e_charts(data.frame(x = "", y = ""), x, renderer = self$plot_format) %>%
         e_bar(y) %>%
@@ -1345,7 +1337,9 @@ QProMS <- R6Class(
     plot_missval_distribution = function() {
       
       if(is.null(self$imputed_data)){return(NULL)}
-      tr_dir <- self$get_trelliscope_path("missval_distribution")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       
       p <- tibble("labels" = c("total", self$expdesign$label)) %>% 
         mutate(plots_panel = panel_lazy(self$plot_missval_distribution_internal)) %>% 
@@ -1703,7 +1697,9 @@ QProMS <- R6Class(
       
       if(is.null(self$normalized_data)){return(NULL)}
       if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the plot."))}
-      tr_dir <- self$get_trelliscope_path("multi_scatter")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       combinations <- t(combn(self$expdesign %>% pull(label), 2))
       colnames(combinations) <- c("x", "y")
       combinations <- as_tibble(combinations)
@@ -2172,7 +2168,9 @@ QProMS <- R6Class(
     plot_volcano = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
-      tr_dir <- self$get_trelliscope_path("volcano")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       
       if(is.null(gene_names_marked)){
         names <- ""
@@ -2197,7 +2195,9 @@ QProMS <- R6Class(
     plot_ma = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
-      tr_dir <- self$get_trelliscope_path("ma")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       
       if(is.null(gene_names_marked)){
         names <- ""
@@ -2274,7 +2274,9 @@ QProMS <- R6Class(
       if(is.null(genes) || length(genes) == 0){
         genes <- "NO_GENE_SELECTED"
       }
-      tr_dir <- self$get_trelliscope_path("stat_profile")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       x_all_genes <- rep(tests, each = length(genes))
       x_all_contrast <- rep(genes, length(tests))
       table <- tibble(
@@ -2541,7 +2543,9 @@ QProMS <- R6Class(
     },
     plot_cluster_profile = function() {
       if(is.null(self$anova_table)){return(NULL)}
-      tr_dir <- self$get_trelliscope_path("cluster_profile")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       
       clusters <- self$anova_table %>% distinct(cluster) %>% filter(cluster != "not_defined") %>% pull()
       colors <- viridis(n = length(clusters), option = self$palette)
@@ -3039,7 +3043,9 @@ QProMS <- R6Class(
     },
     plot_ora = function(groups, arrange_with, show_n_category) {
       if(is.null(groups)){return(NULL)}
-      tr_dir <- self$get_trelliscope_path("ora")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
@@ -3299,7 +3305,9 @@ QProMS <- R6Class(
     },
     plot_gsea = function(groups, arrange_with, show_n_category) {
       if(is.null(groups)){return(NULL)}
-      tr_dir <- self$get_trelliscope_path("gsea")
+      tr_dir <- tempfile()
+      dir.create(tr_dir)
+      add_trelliscope_resource_path("trelliscope", tr_dir)
       if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
