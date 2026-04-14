@@ -924,6 +924,14 @@ QProMS <- R6Class(
         )
       return(t)
     },
+    get_trelliscope_path = function(name) {
+      root_dir <- file.path(tempdir(), "qproms_trelliscope")
+      dir.create(root_dir, showWarnings = FALSE, recursive = TRUE)
+      add_trelliscope_resource_path("trelliscope", root_dir)
+      plot_dir <- file.path(root_dir, name)
+      dir.create(plot_dir, showWarnings = FALSE, recursive = TRUE)
+      return(plot_dir)
+    },
     plot_empty_message = function(message) {
       e_charts(data.frame(x = "", y = ""), x, renderer = self$plot_format) %>%
         e_bar(y) %>%
@@ -935,6 +943,152 @@ QProMS <- R6Class(
           color = "#555"
         ) %>%
         e_show_loading(text = "Loading...", color = self$primary_color)
+    },
+    safe_report_plot = function(plot_fn, message = "Section not available for this analysis.") {
+      tryCatch(
+        plot_fn(),
+        error = function(e) {
+          self$plot_empty_message(message)
+        }
+      )
+    },
+    safe_report_table = function(table_fn, message = "Table not available for this analysis.") {
+      tryCatch(
+        {
+          table <- table_fn()
+          if (is.null(table)) {
+            return(
+              reactable(
+                tibble(Message = message),
+                compact = TRUE,
+                searchable = FALSE,
+                pagination = FALSE
+              )
+            )
+          }
+          table
+        },
+        error = function(e) {
+          reactable(
+            tibble(Message = message),
+            compact = TRUE,
+            searchable = FALSE,
+            pagination = FALSE
+          )
+        }
+      )
+    },
+    prepare_report_outputs = function() {
+      if (is.null(self$data)) {
+        return(invisible(NULL))
+      }
+      
+      if (is.null(self$rank_data) && !is.null(self$protein_rank_target)) {
+        tryCatch(
+          self$rank_protein(
+            target = self$protein_rank_target,
+            by_condition = self$protein_rank_by_cond,
+            selection = self$protein_rank_selection,
+            n_perc = self$protein_rank_top_n
+          ),
+          error = function(e) NULL
+        )
+      }
+      
+      if (isTRUE(self$with_statistics) && is.null(self$stat_table) &&
+          !is.null(self$contrasts) && length(self$contrasts) > 0) {
+        tryCatch(
+          self$stat_uni_test(
+            test = self$contrasts,
+            fc = self$fold_change,
+            alpha = self$univariate_alpha,
+            p_adj_method = self$univariate_p_adj_method,
+            paired_test = self$univariate_paired,
+            test_type = self$univariate_test_type
+          ),
+          error = function(e) NULL
+        )
+      }
+      
+      if (isTRUE(self$with_statistics) && is.null(self$anova_table)) {
+        tryCatch(
+          self$stat_anova(
+            alpha = self$anova_alpha,
+            p_adj_method = self$anova_p_adj_method
+          ),
+          error = function(e) NULL
+        )
+      }
+      
+      if ((is.null(self$nodes_table) || is.null(self$edges_table)) &&
+          !is.null(self$network_from_statistic) && !is.null(self$pdb_database)) {
+        focus_net <- NULL
+        if (self$network_from_statistic == "univariate") {
+          focus_net <- self$network_focus_uni
+        } else if (self$network_from_statistic == "multivariate") {
+          focus_net <- self$network_focus_multi
+        } else if (self$network_from_statistic == "top_rank") {
+          focus_net <- "top_rank"
+        }
+        
+        tryCatch(
+          self$make_nodes(
+            list_from = self$network_from_statistic,
+            focus = focus_net,
+            direction = self$network_uni_direction
+          ),
+          error = function(e) NULL
+        )
+        tryCatch(
+          self$make_edges(source = self$pdb_database),
+          error = function(e) NULL
+        )
+      }
+      
+      if (is.null(self$ora_table) && !is.null(self$go_ora_from_statistic) &&
+          !is.null(self$go_ora_focus) && length(self$go_ora_focus) > 0) {
+        tryCatch(
+          {
+            self$go_ora(
+              list_from = self$go_ora_from_statistic,
+              focus = self$go_ora_focus,
+              database = self$go_ora_database,
+              ontology = self$go_ora_term,
+              simplify_thr = self$go_ora_simplify_thr,
+              alpha = self$go_ora_alpha,
+              p_adj_method = self$go_ora_p_adj_method,
+              min_gs_size = self$go_ora_min_gs_size,
+              max_gs_size = self$go_ora_max_gs_size,
+              background = self$go_ora_background
+            )
+            self$print_ora_table(self$go_ora_plot_arrenge)
+          },
+          error = function(e) NULL
+        )
+      }
+      
+      if (is.null(self$gsea_table) && !is.null(self$go_gsea_focus) && length(self$go_gsea_focus) > 0) {
+        tryCatch(
+          {
+            self$go_gsea(
+              test = self$go_gsea_focus,
+              rank_type = self$go_gsea_rank_with,
+              by_condition = self$go_gsea_by_cond,
+              database = self$go_gsea_database,
+              ontology = self$go_gsea_term,
+              simplify_thr = self$go_gsea_simplify_thr,
+              alpha = self$go_gsea_alpha,
+              p_adj_method = self$go_gsea_p_adj_method,
+              min_gs_size = self$go_gsea_min_gs_size,
+              max_gs_size = self$go_gsea_max_gs_size
+            )
+            self$print_gsea_table(self$go_gsea_plot_arrenge)
+          },
+          error = function(e) NULL
+        )
+      }
+      
+      invisible(NULL)
     },
     plot_protein_counts = function() {
       
@@ -1205,10 +1359,7 @@ QProMS <- R6Class(
     plot_missval_distribution = function() {
       
       if(is.null(self$imputed_data)){return(NULL)}
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("missval_distribution")
       
       p <- tibble("labels" = c("total", self$expdesign$label)) %>% 
         mutate(plots_panel = panel_lazy(self$plot_missval_distribution_internal)) %>% 
@@ -1280,8 +1431,30 @@ QProMS <- R6Class(
         column_to_rownames("gene_names") %>%
         as.matrix()
       
+      if (ncol(mat) < 2 || nrow(mat) == 0) {
+        return(self$plot_empty_message("Not enough data to compute PCA."))
+      }
+      
+      zero_var <- apply(mat, 2, function(x) {
+        vals <- x[!is.na(x)]
+        length(vals) == 0 || isTRUE(all.equal(stats::sd(vals), 0))
+      })
+      if (any(zero_var)) {
+        mat <- mat[, !zero_var, drop = FALSE]
+      }
+      
+      if (ncol(mat) < 2) {
+        return(self$plot_empty_message("PCA is not available because all remaining samples have constant values."))
+      }
+      
       ## perform PCA
-      pca <- prcomp(t(mat), center = TRUE, scale = TRUE) 
+      pca <- tryCatch(
+        prcomp(t(mat), center = TRUE, scale = TRUE),
+        error = function(e) NULL
+      )
+      if (is.null(pca) || is.null(pca$x) || ncol(pca$x) < 2) {
+        return(self$plot_empty_message("PCA is not available for this analysis."))
+      }
       
       ## calculate persentage of each PC
       pca_var <- pca$sdev^2
@@ -1291,7 +1464,7 @@ QProMS <- R6Class(
         label = rownames(pca$x),
         x = pca$x[, 1],
         y = pca$x[, 2],
-        z = pca$x[, 3]
+        z = if (ncol(pca$x) >= 3) pca$x[, 3] else 0
       ) %>% 
         left_join(self$expdesign, by = "label") 
       
@@ -1335,6 +1508,9 @@ QProMS <- R6Class(
           e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
           e_show_loading(text = "Loading...", color = self$primary_color)
       }else{
+        if (ncol(pca$x) < 3) {
+          return(self$plot_empty_message("3D PCA is not available because fewer than three principal components were computed."))
+        }
         p <- pca_table %>%
           group_by(condition) %>%
           e_charts(x) %>%
@@ -1402,8 +1578,13 @@ QProMS <- R6Class(
         select(gene_names, label, intensity) %>%
         pivot_wider(id_cols = gene_names, names_from = label, values_from = intensity) %>%
         filter(if_all(.cols = everything(), .fns = ~ !is.na(.x))) %>%
-        column_to_rownames("gene_names") %>%
-        cor(method = self$cor_method) %>% 
+        column_to_rownames("gene_names")
+      
+      if (nrow(mat) == 0 || ncol(mat) < 2) {
+        return(self$plot_empty_message("Not enough complete data to compute the correlation matrix."))
+      }
+      
+      mat <- cor(mat, method = self$cor_method) %>% 
         round(digits = 2)
       
       p <- mat %>% 
@@ -1536,10 +1717,7 @@ QProMS <- R6Class(
       
       if(is.null(self$normalized_data)){return(NULL)}
       if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the plot."))}
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("multi_scatter")
       combinations <- t(combn(self$expdesign %>% pull(label), 2))
       colnames(combinations) <- c("x", "y")
       combinations <- as_tibble(combinations)
@@ -1791,22 +1969,6 @@ QProMS <- R6Class(
         select(gene_names, starts_with(test)) %>%
         rename_at(vars(matches(test)), ~ str_remove(., paste0(test, "_")))
       
-      min_thr <- table %>%
-        filter(significant) %>%
-        pull(p_val) %>%
-        max(na.rm = TRUE)
-      
-      # Creare le linee di soglia per il grafico
-      left_line <- tibble(
-        p_val = c(-log10(min_thr), -log10(min_thr), max(-log10(table$p_val), na.rm = TRUE)),
-        fold_change = c(min(table$fold_change, na.rm = TRUE), -self$fold_change, -self$fold_change)
-      )
-      
-      right_line <- tibble(
-        p_val = c(max(-log10(table$p_val), na.rm = TRUE), -log10(min_thr), -log10(min_thr)),
-        fold_change = c(self$fold_change, max(table$fold_change, na.rm = TRUE), self$fold_change)
-      )
-      
       # Preparare il grafico
       p <- table %>%
         mutate(color = case_when(
@@ -1826,10 +1988,6 @@ QProMS <- R6Class(
       }
     ")) %>%
         e_add_nested("itemStyle", color) %>%
-        e_data(left_line, fold_change) %>%
-        e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8)) %>%
-        e_data(right_line, fold_change) %>%
-        e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8)) %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataZoom")) %>%
         e_x_axis(
           name = "Difference (fold change)",
@@ -1851,9 +2009,32 @@ QProMS <- R6Class(
             lineHeight = 6 * self$plot_font_size
           )
         ) %>% 
-        e_grid(containLabel = TRUE) %>%
+        e_grid(containLabel = TRUE) %>% 
         e_group("grp") %>%
         e_show_loading(text = "Loading...", color = self$primary_color)
+
+      if (any(table$significant, na.rm = TRUE)) {
+        min_thr <- table %>%
+          filter(significant) %>%
+          pull(p_val) %>%
+          max(na.rm = TRUE)
+
+        left_line <- tibble(
+          p_val = c(-log10(min_thr), -log10(min_thr), max(-log10(table$p_val), na.rm = TRUE)),
+          fold_change = c(min(table$fold_change, na.rm = TRUE), -self$fold_change, -self$fold_change)
+        )
+
+        right_line <- tibble(
+          p_val = c(max(-log10(table$p_val), na.rm = TRUE), -log10(min_thr), -log10(min_thr)),
+          fold_change = c(self$fold_change, max(table$fold_change, na.rm = TRUE), self$fold_change)
+        )
+
+        p <- p %>%
+          e_data(left_line, fold_change) %>%
+          e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8)) %>%
+          e_data(right_line, fold_change) %>%
+          e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8))
+      }
       
       # Aggiungere punti di evidenziazione
       if (highlights_names != "") {
@@ -2005,10 +2186,7 @@ QProMS <- R6Class(
     plot_volcano = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("volcano")
       
       if(is.null(gene_names_marked)){
         names <- ""
@@ -2033,10 +2211,7 @@ QProMS <- R6Class(
     plot_ma = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("ma")
       
       if(is.null(gene_names_marked)){
         names <- ""
@@ -2113,10 +2288,7 @@ QProMS <- R6Class(
       if(is.null(genes) || length(genes) == 0){
         genes <- "NO_GENE_SELECTED"
       }
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("stat_profile")
       x_all_genes <- rep(tests, each = length(genes))
       x_all_contrast <- rep(genes, length(tests))
       table <- tibble(
@@ -2383,10 +2555,7 @@ QProMS <- R6Class(
     },
     plot_cluster_profile = function() {
       if(is.null(self$anova_table)){return(NULL)}
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("cluster_profile")
       
       clusters <- self$anova_table %>% distinct(cluster) %>% filter(cluster != "not_defined") %>% pull()
       colors <- viridis(n = length(clusters), option = self$palette)
@@ -2884,10 +3053,7 @@ QProMS <- R6Class(
     },
     plot_ora = function(groups, arrange_with, show_n_category) {
       if(is.null(groups)){return(NULL)}
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("ora")
       if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
@@ -3147,10 +3313,7 @@ QProMS <- R6Class(
     },
     plot_gsea = function(groups, arrange_with, show_n_category) {
       if(is.null(groups)){return(NULL)}
-      ## create the resouce path for trelliscope
-      tr_dir <- tempfile()
-      dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      tr_dir <- self$get_trelliscope_path("gsea")
       if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
@@ -3208,9 +3371,19 @@ QProMS <- R6Class(
       addStyle(excel, sheet = name, style = body_style, rows = 2:n_row, cols = 1:n_col, gridExpand = T)
       saveWorkbook(excel, handler, overwrite = T)
     },
-    download_table = function(handler_file, table_type, table_extension, extra_columns) {
+    sanitize_export_name = function(name, limit = 31) {
+      clean <- gsub("[^A-Za-z0-9_]+", "_", name)
+      clean <- gsub("_+", "_", clean)
+      clean <- gsub("^_|_$", "", clean)
+      if (nchar(clean) == 0) {
+        clean <- "table"
+      }
+      substr(clean, 1, limit)
+    },
+    exportable_table = function(table_type, extra_columns = NULL) {
       table <- switch(
         table_type,
+        "Filtered" = self$print_table(self$filtered_data, df = TRUE),
         "Filtred" = self$print_table(self$filtered_data, df = TRUE),
         "Normalized" = self$print_table(self$normalized_data, df = TRUE),
         "Imputed" = self$print_table(self$imputed_data, df = TRUE),
@@ -3229,10 +3402,63 @@ QProMS <- R6Class(
           select(gene_names, all_of(extra_columns))
         table <- left_join(table, extra, by = "gene_names")
       }
+      table
+    },
+    download_tables = function(handler_file, table_types, table_extension, extra_columns = NULL) {
+      tables <- map(table_types, ~ self$exportable_table(.x, extra_columns = extra_columns)) %>%
+        set_names(table_types) %>%
+        compact()
+      
+      if (length(tables) == 0) {
+        return(FALSE)
+      }
+      
+      if (length(tables) == 1) {
+        table_name <- names(tables)[1]
+        self$download_table(
+          handler_file = handler_file,
+          table_type = table_name,
+          table_extension = table_extension,
+          extra_columns = extra_columns
+        )
+        return(TRUE)
+      }
+      
+      if (table_extension != ".xlsx") {
+        return("multiple_requires_xlsx")
+      }
+      
+      header_style <- createStyle(
+        fontSize = 12,
+        fontColour = "#0f0f0f",
+        fgFill = "#faf2ca",
+        halign = "center",
+        border = "TopBottomLeftRight")
+      body_style <- createStyle(
+        halign = "center",
+        border = "TopBottomLeftRight")
+      excel <- createWorkbook()
+      for (table_name in names(tables)) {
+        sheet_name <- self$sanitize_export_name(table_name)
+        table <- tables[[table_name]]
+        addWorksheet(excel, sheetName = sheet_name, gridLines = FALSE)
+        writeDataTable(excel, sheet = sheet_name, x = table, keepNA = TRUE, na.string = "NaN")
+        n_row <- nrow(table) + 1
+        n_col <- ncol(table)
+        setColWidths(excel, sheet = sheet_name, cols = 1:n_col, widths = 21)
+        addStyle(excel, sheet = sheet_name, style = header_style, rows = 1, cols = 1:n_col, gridExpand = TRUE)
+        addStyle(excel, sheet = sheet_name, style = body_style, rows = 2:n_row, cols = 1:n_col, gridExpand = TRUE)
+      }
+      saveWorkbook(excel, handler_file, overwrite = TRUE)
+      TRUE
+    },
+    download_table = function(handler_file, table_type, table_extension, extra_columns) {
+      table <- self$exportable_table(table_type, extra_columns = extra_columns)
+      if(is.null(table)) {return(NULL)}
       switch(
         table_extension,
         ".xlsx" = self$download_excel(table, table_type, handler_file),
-        ".csv" = write.csv(table, handler_file),
+        ".csv" = write.csv(table, handler_file, row.names = FALSE),
         ".tsv" = write.table(table, handler_file, sep = "\t", row.names = FALSE, quote = FALSE)
       )
     },

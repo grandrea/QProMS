@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput,  checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate],
+  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput,  checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate, showNotification],
   bslib[page_fillable, layout_columns, card, card_header, card_body, accordion, accordion_panel, nav_select, tooltip],
   gargoyle[init, watch, trigger],
   quarto[quarto_render],
@@ -37,7 +37,7 @@ ui <- function(id) {
             col_widths = c(6, 3, 3),
             selectInput(
               ns("select_table"),
-              "Table",
+              "Tables",
               choices = list(
                 "Preprocessing" = c(
                   "Filtered",
@@ -58,6 +58,7 @@ ui <- function(id) {
                   "GSEA"
                 )
               ),
+              multiple = TRUE,
               width = "100%"
             ),
             selectInput(
@@ -77,8 +78,8 @@ ui <- function(id) {
             ),
             conditionalPanel(
               condition = "input.include_metadata === true &&
-                          ['Filtered','Normalized','Imputed','Volcano','Heatmap']
-                          .includes(input.select_table)",
+                          Array.isArray(input.select_table) &&
+                          input.select_table.some(x => ['Filtered','Normalized','Imputed','Volcano','Heatmap','Ranked'].includes(x))",
               ns = ns,
               selectInput(
                 ns("add_metadata"),
@@ -215,18 +216,37 @@ server <- function(id, r6) {
       }
     })
     
+    observeEvent(input$select_table, {
+      if (length(input$select_table) > 1 && !identical(input$table_extension, ".xlsx")) {
+        updateSelectInput(inputId = "table_extension", selected = ".xlsx")
+        showNotification("Multiple tables are exported together as an .xlsx workbook.", type = "message")
+      }
+    }, ignoreNULL = TRUE)
+    
     output$download_table <- downloadHandler(
       filename = function() {
-        paste0(input$select_table, "_table_", Sys.Date(), input$table_extension)
+        selected_tables <- isolate(input$select_table)
+        if (is.null(selected_tables) || length(selected_tables) == 0) {
+          return(paste0("QProMS_tables_", Sys.Date(), ".xlsx"))
+        }
+        if (length(selected_tables) == 1) {
+          return(paste0(selected_tables[[1]], "_table_", Sys.Date(), input$table_extension))
+        }
+        paste0("QProMS_tables_", Sys.Date(), ".xlsx")
       },
       content = function(file) {
        if(!is.null(r6$data)) {
-         r6$download_table(
+         ok <- r6$download_tables(
            handler_file = file,
-           table_type = input$select_table,
+           table_types = input$select_table,
            table_extension = input$table_extension,
            extra_columns = input$add_metadata
          )
+         if (identical(ok, "multiple_requires_xlsx")) {
+           showNotification("Exporting multiple tables at once is available only as an .xlsx workbook.", type = "warning")
+         } else if (!isTRUE(ok)) {
+           showNotification("No selected tables are available for export.", type = "warning")
+         }
        }
       }
     )
