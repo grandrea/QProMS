@@ -185,14 +185,11 @@ ui <- function(id) {
             inputId = ns("imputation_input"),
             label = "Method",
             choices = c("Mixed" = "mixed", "Perseus" = "perseus", "missForest" = "missforest", "None" = "none"),
-            selected = "mixed"
+            selected = "missforest"
           ),
-          
-          # Mixed / Perseus options
           conditionalPanel(
             condition = "input.imputation_input == 'mixed' || input.imputation_input == 'perseus'",
             ns = ns,
-            
             sliderInput(
               inputId = ns("shift_slider"),
               label = "Down shift",
@@ -209,7 +206,7 @@ ui <- function(id) {
               value = 0.3,
               step = 0.1
             )
-            ),
+          ),
           conditionalPanel(
             condition = "input.imputation_input == 'mixed'",
             ns = ns,

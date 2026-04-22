@@ -75,7 +75,7 @@ QProMS <- R6Class(
     #############################
     # parameters for imputation #
     imputed_data = NULL,
-    imp_methods = "mixed",
+    imp_methods = "missforest",
     mar_mnar_thresh = 0.75,
     imp_shift = 1.8,
     imp_scale = 0.3,
@@ -1319,8 +1319,8 @@ QProMS <- R6Class(
           name = "log2 Intensity",
           nameLocation = "center",
           axisLabel = list(fontSize = self$plot_font_size),
-          min = 10, 
-          max = 40,
+          min = 0, 
+          max = 50,
           nameTextStyle = list(
             fontWeight = "bold",
             fontSize = self$plot_font_size,
