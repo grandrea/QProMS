@@ -246,9 +246,9 @@ ui <- function(id) {
 #' @export
 server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
-    render_ora_outputs <- function(message = NULL) {
+    render_ora_outputs <- function(message = NULL, notification_type = "warning") {
       if (!is.null(message)) {
-        showNotification(message, type = "warning")
+        showNotification(message, type = notification_type)
       }
       output$bar_plot <- renderTrelliscope({
         focus_plot <- r6$go_ora_focus
@@ -380,10 +380,18 @@ server <- function(id, r6, main_session) {
       }, error = function(e) {
         r6$ora_result_list <- NULL
         r6$ora_table <- NULL
-        render_ora_outputs("ORA could not be generated for the selected input.")
+        r6$set_ora_feedback("error", paste("ORA failed:", conditionMessage(e)))
+        render_ora_outputs(r6$ora_message, "error")
         return(invisible(NULL))
       })
-      render_ora_outputs()
+      ora_status <- if (length(r6$ora_status) == 1 && !is.na(r6$ora_status)) r6$ora_status else ""
+      notification_type <- switch(
+        ora_status,
+        error = "error",
+        warning = "warning",
+        "message"
+      )
+      render_ora_outputs(r6$ora_message, notification_type)
     })
   })
 }

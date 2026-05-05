@@ -121,6 +121,8 @@ QProMS <- R6Class(
     # parameters For ORA #
     ora_result_list = NULL,
     ora_table = NULL,
+    ora_status = NULL,
+    ora_message = NULL,
     go_ora_from_statistic = NULL,
     go_ora_focus = NULL,
     go_ora_database = "GO",
@@ -502,7 +504,7 @@ QProMS <- R6Class(
           mutate(!!gene_col := str_extract(.data[[gene_col]], "[^;]*")) %>% 
           mutate(!!gene_col := make.unique(.data[[gene_col]], sep = "_"))
       } else if (self$input_type == "ProteomeDiscoverer") {
-        org_map <- inputs_type_lists$org_map
+        org_map <- self$inputs_type_lists$org_map
         org_info <- org_map[[self$organism]]
         if (is.null(org_info)) return(NULL)
         orgdb     <- org_info$orgdb
@@ -2714,7 +2716,7 @@ QProMS <- R6Class(
       edges_string_table <- NULL
       edges_corum_table <- NULL
       if(is.null(self$nodes_table)){return(NULL)}
-      org_map <- inputs_type_lists$org_map
+      org_map <- self$inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
       if (is.null(org_info)) return(NULL)
       tax_id <- org_info$tax_id
@@ -2965,11 +2967,27 @@ QProMS <- R6Class(
       }
       return(data)
     },
+    reset_ora_feedback = function() {
+      self$ora_status <- NULL
+      self$ora_message <- NULL
+    },
+    set_ora_feedback = function(status, message) {
+      self$ora_status <- status
+      self$ora_message <- message
+    },
     go_ora = function(list_from, focus, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size, background) {
-      if(is.null(focus)){return(NULL)}
-      org_map <- inputs_type_lists$org_map
+      self$reset_ora_feedback()
+      self$ora_result_list <- NULL
+      if(is.null(focus)){
+        self$set_ora_feedback("warning", "No ORA input was selected.")
+        return(NULL)
+      }
+      org_map <- self$inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
-      if (is.null(org_info)) return(NULL)
+      if (is.null(org_info)) {
+        self$set_ora_feedback("error", "ORA could not start because the selected organism is not configured.")
+        return(NULL)
+      }
       
       orgdb     <- org_info$orgdb
       kegg_org  <- org_info$kegg
@@ -3015,25 +3033,48 @@ QProMS <- R6Class(
       if (!background) {
         uni <- NULL
       }
+      gene_vector <- map(gene_vector, ~ unique(.x[!is.na(.x) & .x != "" & .x != "NO_Significant"]))
+      gene_counts <- lengths(gene_vector)
+      empty_groups <- names(gene_vector)[gene_counts == 0]
+      if (length(empty_groups) == length(gene_vector)) {
+        self$set_ora_feedback("warning", "No significant genes were available for the selected ORA input.")
+        return(NULL)
+      }
+      gene_vector_to_run <- gene_vector[gene_counts > 0]
+      ora_errors <- character()
+      run_ora_map <- function(named_vectors, enrich_fun) {
+        imap(named_vectors, function(genes, group_name) {
+          tryCatch(
+            enrich_fun(genes),
+            error = function(e) {
+              ora_errors[[group_name]] <<- conditionMessage(e)
+              NULL
+            }
+          )
+        })
+      }
       
       if (database == "GO") {
-        self$ora_result_list <- map(gene_vector, possibly(~ enrichGO(
-          gene = .x,
-          OrgDb = orgdb,
-          keyType = 'SYMBOL',
-          ont = ontology,
-          pAdjustMethod = p_adj_method,
-          universe = uni,
-          minGSSize = min_gs_size,
-          maxGSSize = max_gs_size,
-          readable = TRUE) %>% 
-            clusterProfiler::filter(p.adjust < alpha) %>% 
-            simplify(cutoff = simplify_thr), otherwise = NULL))
+        self$ora_result_list <- run_ora_map(gene_vector_to_run, function(genes) {
+          enrichGO(
+            gene = genes,
+            OrgDb = orgdb,
+            keyType = 'SYMBOL',
+            ont = ontology,
+            pAdjustMethod = p_adj_method,
+            universe = uni,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size,
+            readable = TRUE
+          ) %>%
+            clusterProfiler::filter(p.adjust < alpha) %>%
+            simplify(cutoff = simplify_thr)
+        })
       }
       
       if (database == "KEGG") {
         entrez <- map(
-          gene_vector,
+          gene_vector_to_run,
           ~ bitr(
             .x,
             fromType = "SYMBOL",
@@ -3041,20 +3082,23 @@ QProMS <- R6Class(
             OrgDb    = orgdb
           ) %>% pull(ENTREZID)
         )
-        self$ora_result_list <- map(entrez, possibly(~ enrichKEGG(
-          gene = .x,
-          organism = kegg_org,
-          keyType = 'kegg',
-          pAdjustMethod = p_adj_method,
-          universe = uni,
-          minGSSize = min_gs_size,
-          maxGSSize = max_gs_size) %>% 
-            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+        self$ora_result_list <- run_ora_map(entrez, function(genes) {
+          enrichKEGG(
+            gene = genes,
+            organism = kegg_org,
+            keyType = 'kegg',
+            pAdjustMethod = p_adj_method,
+            universe = uni,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size
+          ) %>%
+            clusterProfiler::filter(p.adjust < alpha)
+        })
       }
       
       if (database == "WikiPathways") {
         entrez <- map(
-          gene_vector,
+          gene_vector_to_run,
           ~ bitr(
             .x,
             fromType = "SYMBOL",
@@ -3062,20 +3106,47 @@ QProMS <- R6Class(
             OrgDb    = orgdb
           ) %>% pull(ENTREZID)
         )
-        self$ora_result_list <- map(entrez, possibly(~ enrichWP(
-          gene = .x,
-          organism = wiki_org,
-          pAdjustMethod = p_adj_method,
-          universe = uni,
-          minGSSize = min_gs_size,
-          maxGSSize = max_gs_size) %>% 
-            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+        self$ora_result_list <- run_ora_map(entrez, function(genes) {
+          enrichWP(
+            gene = genes,
+            organism = wiki_org,
+            pAdjustMethod = p_adj_method,
+            universe = uni,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size
+          ) %>%
+            clusterProfiler::filter(p.adjust < alpha)
+        })
       }
-      
+      successful_groups <- names(compact(self$ora_result_list))
+      if (length(successful_groups) == 0) {
+        if (length(ora_errors) > 0) {
+          self$set_ora_feedback(
+            "error",
+            paste0("ORA failed during enrichment: ", paste(names(ora_errors), unname(ora_errors), sep = ": ", collapse = "; "))
+          )
+        } else {
+          self$set_ora_feedback("warning", "ORA ran successfully but no enrichment terms passed the current thresholds.")
+        }
+        return(NULL)
+      }
+      messages <- character()
+      if (length(empty_groups) > 0) {
+        messages <- c(messages, paste0("No significant genes for: ", paste(empty_groups, collapse = ", ")))
+      }
+      if (length(ora_errors) > 0) {
+        messages <- c(messages, paste0("Enrichment failed for: ", paste(names(ora_errors), collapse = ", ")))
+      }
+      if (length(messages) > 0) {
+        self$set_ora_feedback("warning", paste(messages, collapse = ". "))
+      }
     },
     print_ora_table = function(arranged_with) {
       if(length(compact(self$ora_result_list)) == 0){
         self$ora_table <- NULL
+        if (is.null(self$ora_message)) {
+          self$set_ora_feedback("warning", "ORA ran successfully but no enrichment terms passed the current thresholds.")
+        }
         return(NULL)
       }
       results_table <- map(self$ora_result_list, ~ pluck(.x, "result")) %>%
@@ -3083,11 +3154,15 @@ QProMS <- R6Class(
         as_tibble()
       if(nrow(results_table) == 0) {
         self$ora_table <- NULL
+        if (is.null(self$ora_message)) {
+          self$set_ora_feedback("warning", "ORA ran successfully but no enrichment terms passed the current thresholds.")
+        }
         return(NULL)
       }
       required_cols <- c("GeneRatio", "BgRatio")
       if (!all(required_cols %in% names(results_table))) {
         self$ora_table <- NULL
+        self$set_ora_feedback("error", "ORA returned an unexpected result structure and could not be plotted.")
         return(NULL)
       }
       log_cols <- intersect(c("pvalue", "p.adjust", "qvalue"), names(results_table))
@@ -3260,7 +3335,7 @@ QProMS <- R6Class(
     },
     go_gsea = function(test, rank_type, by_condition, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size) {
       if(is.null(test)){return(NULL)}
-      org_map <- inputs_type_lists$org_map
+      org_map <- self$inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
       if (is.null(org_info)) return(NULL)
       
