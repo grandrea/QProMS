@@ -60,7 +60,10 @@ ui <- function(id) {
       nav_panel(
         title = "Experimental Design",
         layout_sidebar(
-          rHandsontableOutput(ns("exp_design")),
+          div(
+            uiOutput(ns("exp_design_info")),
+            rHandsontableOutput(ns("exp_design"))
+          ),
           sidebar = sidebar(
             width = 300,
             actionButton(
@@ -92,6 +95,8 @@ server <- function(id, r6, main_session) {
     
     ns <- session$ns
     init("genes")
+    
+    output$exp_design_info <- renderUI({NULL})
     
     observe({
       watch("session")
@@ -247,14 +252,30 @@ server <- function(id, r6, main_session) {
     
     observeEvent(input$confirm2, {
       if(!is.null(r6$raw_data) & r6$new_session) {
+        intensity_input <- if(r6$identify_table_status == "success") {
+          input$intensity_type
+        } else {
+          r6$external_genes_column <- input$metadata_column
+          input$intensity_columns
+        }
+        intensity_cols <- r6$get_expdesign_intensity_cols(intensity_input)
+        output$exp_design_info <- renderUI({
+          hint_text <- if (length(intensity_cols) > 16) {
+            "Scroll inside the table to review all rows."
+          } else {
+            "All rows fit in the current view."
+          }
+          div(
+            class = "alert alert-secondary",
+            style = "padding: 0.6rem 0.9rem; margin-bottom: 0.75rem;",
+            tags$strong(paste(length(intensity_cols), "samples in the design table")),
+            br(),
+            tags$span(hint_text)
+          )
+        })
         nav_select("upload_container", "Experimental Design")
         output$exp_design <- renderRHandsontable({
-          if(r6$identify_table_status == "success") {
-            r6$make_expdesign(input$intensity_type)
-          } else {
-            r6$external_genes_column <- input$metadata_column
-            r6$make_expdesign(input$intensity_columns)
-          }
+          r6$make_expdesign(intensity_input)
         })
       }
     })

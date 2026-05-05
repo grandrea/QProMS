@@ -363,20 +363,21 @@ QProMS <- R6Class(
       
       return(reactable(summary_table))
     },
+    get_expdesign_intensity_cols = function(intensity_type) {
+      if(self$identify_table_status == "success") {
+        if (self$input_type == "DIA-NN" && self$diann_sequences_parser) {
+          return(self$get_diann_sequence_intensity_cols(self$raw_data))
+        }
+        return(grep(intensity_type, colnames(self$raw_data), value = TRUE, ignore.case = FALSE))
+      }
+      if(is.null(intensity_type)){intensity_type <- ""}
+      intensity_type
+    },
     make_expdesign = function(intensity_type) {
       
-      if(self$identify_table_status == "success") {
-        intensity_cols <- if (self$input_type == "DIA-NN" && self$diann_sequences_parser) {
-          self$get_diann_sequence_intensity_cols(self$raw_data)
-        } else {
-          grep(intensity_type, colnames(self$raw_data), value = TRUE, ignore.case = FALSE)
-        }
-      } else {
-        if(is.null(intensity_type)){intensity_type <- ""}
-        intensity_cols <- intensity_type
-      }
+      intensity_cols <- self$get_expdesign_intensity_cols(intensity_type)
       
-      visible_rows <- min(length(intensity_cols), 24)
+      visible_rows <- max(min(length(intensity_cols), 16), 6)
       table_height <- 30 + (visible_rows * 23)
       
       table <- tibble("keep" = TRUE, "condition" = "", "key" = intensity_cols) %>% 
