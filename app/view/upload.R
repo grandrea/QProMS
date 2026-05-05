@@ -152,10 +152,21 @@ server <- function(id, r6, main_session) {
                 "Select Gene Column",
                 choices = colnames(r6$raw_data)[sapply(r6$raw_data, is.character)]
               ),
-              textInput(
-                ns("intensity_pattern"),
-                "Filter intensity columns (regex or keyword)",
-                placeholder = "e.g. LFQ|Intensity|Sample_"
+              layout_columns(
+                col_widths = c(9, 3),
+                textInput(
+                  ns("intensity_pattern"),
+                  "Filter intensity columns (regex or keyword)",
+                  placeholder = "e.g. LFQ|Intensity|Sample_"
+                ),
+                div(
+                  style = "margin-top: 1.8rem;",
+                  input_switch(
+                    id = ns("auto_select_pattern"),
+                    label = "Auto-select",
+                    value = TRUE
+                  )
+                )
               ),
               selectizeInput(
                 ns("intensity_columns"),
@@ -215,15 +226,21 @@ server <- function(id, r6, main_session) {
           value = TRUE,
           ignore.case = TRUE
         )
+        selected <- if (isTRUE(input$auto_select_pattern)) {
+          filtered
+        } else {
+          intersect(input$intensity_columns, filtered)
+        }
       } else {
         filtered <- all_numeric
+        selected <- intersect(input$intensity_columns, filtered)
       }
       
       updateSelectizeInput(
         session,
         "intensity_columns",
         choices = filtered,
-        selected = intersect(input$intensity_columns, filtered),
+        selected = selected,
         server = TRUE
       )
     })

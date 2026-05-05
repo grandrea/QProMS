@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput,  checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate, showNotification],
+  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput, checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate, showNotification],
   bslib[page_fillable, layout_columns, card, card_header, card_body, accordion, accordion_panel, nav_select, tooltip],
   gargoyle[init, watch, trigger],
   quarto[quarto_render],
@@ -222,19 +222,52 @@ server <- function(id, r6) {
         paste0("QProMS_tables_", Sys.Date(), ".xlsx")
       },
       content = function(file) {
-       if(!is.null(r6$data)) {
-         ok <- r6$download_tables(
-           handler_file = file,
-           table_types = input$select_table,
-           table_extension = input$table_extension,
-           extra_columns = input$add_metadata
-         )
-         if (identical(ok, "multiple_requires_xlsx")) {
-           showNotification("Exporting multiple tables at once is available only as an .xlsx workbook.", type = "warning")
-         } else if (!isTRUE(ok)) {
-           showNotification("No selected tables are available for export.", type = "warning")
-         }
-       }
+        if (is.null(r6$data)) {
+          shinyalert(
+            title = "No data loaded",
+            text  = "Please load your data before downloading a table.",
+            type  = "warning"
+          )
+          return(invisible(NULL))
+        }
+        
+        selected_tables <- input$select_table
+        if (is.null(selected_tables) || length(selected_tables) == 0) {
+          shinyalert(
+            title = "No tables selected",
+            text  = "Please select at least one table to export.",
+            type  = "warning"
+          )
+          return(invisible(NULL))
+        }
+        
+        ok <- r6$download_tables(
+          handler_file = file,
+          table_types = selected_tables,
+          table_extension = input$table_extension,
+          extra_columns = input$add_metadata
+        )
+        
+        if (identical(ok, "multiple_requires_xlsx")) {
+          showNotification("Exporting multiple tables at once is available only as an .xlsx workbook.", type = "warning")
+          return(invisible(NULL))
+        }
+        
+        if (!isTRUE(ok)) {
+          if (length(selected_tables) == 1 && is.null(get_table_from_r6(selected_tables[[1]]))) {
+            shinyalert(
+              title = "Table not available",
+              text  = paste0(
+                "The '", selected_tables[[1]], "' table has not been generated yet. ",
+                "Please complete the corresponding analysis step first."
+              ),
+              type  = "warning"
+            )
+          } else {
+            showNotification("No selected tables are available for export.", type = "warning")
+          }
+          return(invisible(NULL))
+        }
       }
     )
     
