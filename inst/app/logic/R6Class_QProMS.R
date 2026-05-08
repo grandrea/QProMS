@@ -44,6 +44,7 @@ QProMS <- R6Class(
     input_type = NULL,
     intensity_type = NULL,
     external_genes_column = NULL,
+    diann_sequences_parser = FALSE,
     log_transform = TRUE,
     organism = NULL, 
     expdesign = NULL,
@@ -120,6 +121,8 @@ QProMS <- R6Class(
     # parameters For ORA #
     ora_result_list = NULL,
     ora_table = NULL,
+    ora_status = NULL,
+    ora_message = NULL,
     go_ora_from_statistic = NULL,
     go_ora_focus = NULL,
     go_ora_database = "GO",
@@ -180,6 +183,7 @@ QProMS <- R6Class(
     },
     loading_data = function(input_path, input_name) {
       self$raw_data <- fread(input = input_path) 
+      self$diann_sequences_parser <- FALSE
     },
     loading_parameters = function(input_path, self, print = FALSE) {
       parameters_list <- list.load(input_path)
@@ -234,6 +238,26 @@ QProMS <- R6Class(
         return(list(status = FALSE, message = "No Intensity columns found."))
       }
     },
+    get_diann_sequence_gene_col = function(data = self$raw_data) {
+      if ("Genes" %in% colnames(data)) {
+        return("Genes")
+      }
+      if ("Gene" %in% colnames(data)) {
+        return("Gene")
+      }
+      return(NULL)
+    },
+    get_diann_sequence_intensity_cols = function(data = self$raw_data) {
+      excluded_cols <- c("N.Sequences", "N.Proteotypic.Sequences", "Genes", "Gene", "Protein.Ids")
+      intensity_cols <- colnames(data)[sapply(data, is.numeric) & !colnames(data) %in% excluded_cols]
+      return(intensity_cols)
+    },
+    identify_diann_sequence_table = function(data = self$raw_data) {
+      has_sequence_col <- "N.Sequences" %in% colnames(data)
+      gene_col <- self$get_diann_sequence_gene_col(data)
+      intensity_cols <- self$get_diann_sequence_intensity_cols(data)
+      has_sequence_col && !is.null(gene_col) && length(intensity_cols) > 0
+    },
     identify_table_type = function() {
       data <- self$raw_data
       required_columns_list <- self$inputs_type_lists$metadata_list
@@ -241,6 +265,13 @@ QProMS <- R6Class(
       table_names <- names(required_columns_list)
       
       error_messages <- list()
+
+      if (self$identify_diann_sequence_table(data)) {
+        self$identify_table_status <- "success"
+        self$input_type <- "DIA-NN"
+        self$diann_sequences_parser <- TRUE
+        return(list(status = "success", message = "Table identified: DIA-NN"))
+      }
       
       for (i in seq_along(required_columns_list)) {
         table_name <- table_names[i]
@@ -257,6 +288,7 @@ QProMS <- R6Class(
         if (required_columns_check$status && intensity_columns_check$status) {
           self$identify_table_status <- "success"
           self$input_type <- table_name
+          self$diann_sequences_parser <- FALSE
           return(list(status = "success", message = paste("Table identified:", table_name)))
         } else {
           # Collect error messages
@@ -270,10 +302,14 @@ QProMS <- R6Class(
       # If no table type matches, return the collected error messages
       self$identify_table_status <- "info"
       self$input_type <- "External"
+      self$diann_sequences_parser <- FALSE
       return(list(status = "info", messages = error_messages))
     },
     check_intensity_regex = function() {
-      regex_vec <- flatten_chr(inputs_type_lists$intensity_list %>% keep_at(self$input_type))
+      if (self$input_type == "DIA-NN" && self$diann_sequences_parser) {
+        return("DIA-NN sequence columns")
+      }
+      regex_vec <- flatten_chr(self$inputs_type_lists$intensity_list %>% keep_at(self$input_type))
       
       found_regex <- sapply(regex_vec, function(regex) {
         any(str_detect(colnames(self$raw_data), regex))
@@ -285,7 +321,11 @@ QProMS <- R6Class(
     create_summary_table = function() {
 
       data <- self$raw_data
-      required_columns <- inputs_type_lists$metadata_list[[self$input_type]][1]
+      required_columns <- if (self$input_type == "DIA-NN" && self$diann_sequences_parser) {
+        self$get_diann_sequence_gene_col(data)
+      } else {
+        self$inputs_type_lists$metadata_list[[self$input_type]][1]
+      }
       intensity_patterns <- self$check_intensity_regex()
       
       num_rows <- nrow(data)
@@ -299,7 +339,11 @@ QProMS <- R6Class(
       })
       
       missing_values_counts <- sapply(intensity_patterns, function(pattern) {
-        intensity_cols <- grep(pattern, colnames(data), value = TRUE)
+        intensity_cols <- if (self$input_type == "DIA-NN" && self$diann_sequences_parser) {
+          self$get_diann_sequence_intensity_cols(data)
+        } else {
+          grep(pattern, colnames(data), value = TRUE)
+        }
         
         total_values <- length(unlist(data[, ..intensity_cols]))
         missing_values <- sum(is.na(data[, ..intensity_cols]) | data[, ..intensity_cols] == 0 | data[, ..intensity_cols] == "")
@@ -321,17 +365,25 @@ QProMS <- R6Class(
       
       return(reactable(summary_table))
     },
+    get_expdesign_intensity_cols = function(intensity_type) {
+      if(self$identify_table_status == "success") {
+        if (self$input_type == "DIA-NN" && self$diann_sequences_parser) {
+          return(self$get_diann_sequence_intensity_cols(self$raw_data))
+        }
+        return(grep(intensity_type, colnames(self$raw_data), value = TRUE, ignore.case = FALSE))
+      }
+      if(is.null(intensity_type)){intensity_type <- ""}
+      intensity_type
+    },
     make_expdesign = function(intensity_type) {
       
-      if(self$identify_table_status == "success") {
-        intensity_cols <- grep(intensity_type, colnames(self$raw_data), value = TRUE, ignore.case = FALSE)
-      } else {
-        if(is.null(intensity_type)){intensity_type <- ""}
-        intensity_cols <- intensity_type
-      }
+      intensity_cols <- self$get_expdesign_intensity_cols(intensity_type)
+      
+      visible_rows <- max(min(length(intensity_cols), 16), 6)
+      table_height <- 30 + (visible_rows * 23)
       
       table <- tibble("keep" = TRUE, "condition" = "", "key" = intensity_cols) %>% 
-        rhandsontable(width = "100%", stretchH = "all", height = 500) %>%
+        rhandsontable(width = "100%", stretchH = "all", height = table_height) %>%
         hot_col("key", readOnly = TRUE)
       
       return(table)
@@ -452,7 +504,7 @@ QProMS <- R6Class(
           mutate(!!gene_col := str_extract(.data[[gene_col]], "[^;]*")) %>% 
           mutate(!!gene_col := make.unique(.data[[gene_col]], sep = "_"))
       } else if (self$input_type == "ProteomeDiscoverer") {
-        org_map <- inputs_type_lists$org_map
+        org_map <- self$inputs_type_lists$org_map
         org_info <- org_map[[self$organism]]
         if (is.null(org_info)) return(NULL)
         orgdb     <- org_info$orgdb
@@ -489,6 +541,14 @@ QProMS <- R6Class(
           ) %>% 
           mutate(gene_symbol = sub("_.*$", "", gene)) %>% 
           filter(!stringr::str_detect(db, "REV_")) %>% 
+          mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
+      } else if (self$input_type == "DIA-NN" && self$diann_sequences_parser) {
+        gene_col <- self$get_diann_sequence_gene_col(initial_table)
+        protein_col <- if ("Protein.Ids" %in% colnames(initial_table)) "Protein.Ids" else gene_col
+        required_columns <- unique(c(gene_col, protein_col))
+        initial_table <- initial_table %>%
+          mutate(!!gene_col := str_extract(.data[[gene_col]], "[^;]*")) %>%
+          mutate(!!protein_col := str_extract(.data[[protein_col]], "[^;]*")) %>%
           mutate(!!gene_col := self$make_unique_genes(.data[[gene_col]], .data[[protein_col]]))
       } else {
         required_columns <- inputs_type_lists$metadata_list[[self$input_type]]
@@ -822,6 +882,9 @@ QProMS <- R6Class(
       # -----------------------------
       else {
         self$is_imp <- FALSE
+        self$is_mixed <- FALSE
+        self$imputed_data <- self$normalized_data %>%
+          mutate(imputed = FALSE)
       }
   
       
@@ -829,8 +892,11 @@ QProMS <- R6Class(
       stopifnot(!all(is.na(self$imputed_data$intensity))) 
     },
     rank_protein = function(target, by_condition, selection, n_perc) {
+      data_source <- if (self$is_imp) self$imputed_data else self$normalized_data
+      if(is.null(data_source)){return(NULL)}
+      
       if(by_condition) {
-        data <- self$imputed_data %>%
+        data <- data_source %>%
           filter(condition == target) %>%
           group_by(gene_names) %>%
           summarise(mean_intenisty = mean(intensity)) %>%
@@ -840,7 +906,7 @@ QProMS <- R6Class(
           rename(intensity = mean_intenisty) %>% 
           select(gene_names, intensity, rank)
       } else {
-        data <- self$imputed_data %>%
+        data <- data_source %>%
           filter(label == target) %>%
           arrange(-intensity) %>%
           mutate(rank = rank(-intensity)) %>% 
@@ -918,6 +984,21 @@ QProMS <- R6Class(
         )
       return(t)
     },
+    stat_table_for_test = function(test) {
+      if (is.null(self$stat_table) || is.null(test) || length(test) != 1 || is.na(test) || test == "") {
+        return(NULL)
+      }
+      suffixes <- c("fold_change", "p_val", "p_adj", "significant", "mean_abundance")
+      wanted <- paste0(test, "_", suffixes)
+      existing <- intersect(wanted, colnames(self$stat_table))
+      if (length(existing) == 0) {
+        return(NULL)
+      }
+      table <- self$stat_table %>%
+        select(all_of(c("gene_names", existing)))
+      names(table)[-1] <- sub(paste0(test, "_"), "", names(table)[-1], fixed = TRUE)
+      table
+    },
     plot_empty_message = function(message) {
       e_charts(data.frame(x = "", y = ""), x, renderer = self$plot_format) %>%
         e_bar(y) %>%
@@ -929,6 +1010,152 @@ QProMS <- R6Class(
           color = "#555"
         ) %>%
         e_show_loading(text = "Loading...", color = self$primary_color)
+    },
+    safe_report_plot = function(plot_fn, message = "Section not available for this analysis.") {
+      tryCatch(
+        plot_fn(),
+        error = function(e) {
+          self$plot_empty_message(message)
+        }
+      )
+    },
+    safe_report_table = function(table_fn, message = "Table not available for this analysis.") {
+      tryCatch(
+        {
+          table <- table_fn()
+          if (is.null(table)) {
+            return(
+              reactable(
+                tibble(Message = message),
+                compact = TRUE,
+                searchable = FALSE,
+                pagination = FALSE
+              )
+            )
+          }
+          table
+        },
+        error = function(e) {
+          reactable(
+            tibble(Message = message),
+            compact = TRUE,
+            searchable = FALSE,
+            pagination = FALSE
+          )
+        }
+      )
+    },
+    prepare_report_outputs = function() {
+      if (is.null(self$data)) {
+        return(invisible(NULL))
+      }
+      
+      if (is.null(self$rank_data) && !is.null(self$protein_rank_target)) {
+        tryCatch(
+          self$rank_protein(
+            target = self$protein_rank_target,
+            by_condition = self$protein_rank_by_cond,
+            selection = self$protein_rank_selection,
+            n_perc = self$protein_rank_top_n
+          ),
+          error = function(e) NULL
+        )
+      }
+      
+      if (isTRUE(self$with_statistics) && is.null(self$stat_table) &&
+          !is.null(self$contrasts) && length(self$contrasts) > 0) {
+        tryCatch(
+          self$stat_uni_test(
+            test = self$contrasts,
+            fc = self$fold_change,
+            alpha = self$univariate_alpha,
+            p_adj_method = self$univariate_p_adj_method,
+            paired_test = self$univariate_paired,
+            test_type = self$univariate_test_type
+          ),
+          error = function(e) NULL
+        )
+      }
+      
+      if (isTRUE(self$with_statistics) && is.null(self$anova_table)) {
+        tryCatch(
+          self$stat_anova(
+            alpha = self$anova_alpha,
+            p_adj_method = self$anova_p_adj_method
+          ),
+          error = function(e) NULL
+        )
+      }
+      
+      if ((is.null(self$nodes_table) || is.null(self$edges_table)) &&
+          !is.null(self$network_from_statistic) && !is.null(self$pdb_database)) {
+        focus_net <- NULL
+        if (self$network_from_statistic == "univariate") {
+          focus_net <- self$network_focus_uni
+        } else if (self$network_from_statistic == "multivariate") {
+          focus_net <- self$network_focus_multi
+        } else if (self$network_from_statistic == "top_rank") {
+          focus_net <- "top_rank"
+        }
+        
+        tryCatch(
+          self$make_nodes(
+            list_from = self$network_from_statistic,
+            focus = focus_net,
+            direction = self$network_uni_direction
+          ),
+          error = function(e) NULL
+        )
+        tryCatch(
+          self$make_edges(source = self$pdb_database),
+          error = function(e) NULL
+        )
+      }
+      
+      if (is.null(self$ora_table) && !is.null(self$go_ora_from_statistic) &&
+          !is.null(self$go_ora_focus) && length(self$go_ora_focus) > 0) {
+        tryCatch(
+          {
+            self$go_ora(
+              list_from = self$go_ora_from_statistic,
+              focus = self$go_ora_focus,
+              database = self$go_ora_database,
+              ontology = self$go_ora_term,
+              simplify_thr = self$go_ora_simplify_thr,
+              alpha = self$go_ora_alpha,
+              p_adj_method = self$go_ora_p_adj_method,
+              min_gs_size = self$go_ora_min_gs_size,
+              max_gs_size = self$go_ora_max_gs_size,
+              background = self$go_ora_background
+            )
+            self$print_ora_table(self$go_ora_plot_arrenge)
+          },
+          error = function(e) NULL
+        )
+      }
+      
+      if (is.null(self$gsea_table) && !is.null(self$go_gsea_focus) && length(self$go_gsea_focus) > 0) {
+        tryCatch(
+          {
+            self$go_gsea(
+              test = self$go_gsea_focus,
+              rank_type = self$go_gsea_rank_with,
+              by_condition = self$go_gsea_by_cond,
+              database = self$go_gsea_database,
+              ontology = self$go_gsea_term,
+              simplify_thr = self$go_gsea_simplify_thr,
+              alpha = self$go_gsea_alpha,
+              p_adj_method = self$go_gsea_p_adj_method,
+              min_gs_size = self$go_gsea_min_gs_size,
+              max_gs_size = self$go_gsea_max_gs_size
+            )
+            self$print_gsea_table(self$go_gsea_plot_arrenge)
+          },
+          error = function(e) NULL
+        )
+      }
+      
+      invisible(NULL)
     },
     plot_protein_counts = function() {
       
@@ -1199,7 +1426,6 @@ QProMS <- R6Class(
     plot_missval_distribution = function() {
       
       if(is.null(self$imputed_data)){return(NULL)}
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
@@ -1274,8 +1500,30 @@ QProMS <- R6Class(
         column_to_rownames("gene_names") %>%
         as.matrix()
       
+      if (ncol(mat) < 2 || nrow(mat) == 0) {
+        return(self$plot_empty_message("Not enough data to compute PCA."))
+      }
+      
+      zero_var <- apply(mat, 2, function(x) {
+        vals <- x[!is.na(x)]
+        length(vals) == 0 || isTRUE(all.equal(stats::sd(vals), 0))
+      })
+      if (any(zero_var)) {
+        mat <- mat[, !zero_var, drop = FALSE]
+      }
+      
+      if (ncol(mat) < 2) {
+        return(self$plot_empty_message("PCA is not available because all remaining samples have constant values."))
+      }
+      
       ## perform PCA
-      pca <- prcomp(t(mat), center = TRUE, scale = TRUE) 
+      pca <- tryCatch(
+        prcomp(t(mat), center = TRUE, scale = TRUE),
+        error = function(e) NULL
+      )
+      if (is.null(pca) || is.null(pca$x) || ncol(pca$x) < 2) {
+        return(self$plot_empty_message("PCA is not available for this analysis."))
+      }
       
       ## calculate persentage of each PC
       pca_var <- pca$sdev^2
@@ -1285,7 +1533,7 @@ QProMS <- R6Class(
         label = rownames(pca$x),
         x = pca$x[, 1],
         y = pca$x[, 2],
-        z = pca$x[, 3]
+        z = if (ncol(pca$x) >= 3) pca$x[, 3] else 0
       ) %>% 
         left_join(self$expdesign, by = "label") 
       
@@ -1329,6 +1577,9 @@ QProMS <- R6Class(
           e_toolbox_feature(feature = c("saveAsImage", "restore")) %>% 
           e_show_loading(text = "Loading...", color = self$primary_color)
       }else{
+        if (ncol(pca$x) < 3) {
+          return(self$plot_empty_message("3D PCA is not available because fewer than three principal components were computed."))
+        }
         p <- pca_table %>%
           group_by(condition) %>%
           e_charts(x) %>%
@@ -1396,8 +1647,13 @@ QProMS <- R6Class(
         select(gene_names, label, intensity) %>%
         pivot_wider(id_cols = gene_names, names_from = label, values_from = intensity) %>%
         filter(if_all(.cols = everything(), .fns = ~ !is.na(.x))) %>%
-        column_to_rownames("gene_names") %>%
-        cor(method = self$cor_method) %>% 
+        column_to_rownames("gene_names")
+      
+      if (nrow(mat) == 0 || ncol(mat) < 2) {
+        return(self$plot_empty_message("Not enough complete data to compute the correlation matrix."))
+      }
+      
+      mat <- cor(mat, method = self$cor_method) %>% 
         round(digits = 2)
       
       p <- mat %>% 
@@ -1530,7 +1786,6 @@ QProMS <- R6Class(
       
       if(is.null(self$normalized_data)){return(NULL)}
       if(nrow(self$expdesign) == 1){return(self$plot_empty_message("Not enough samples to compute the plot."))}
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
@@ -1781,25 +2036,10 @@ QProMS <- R6Class(
         ceiling()
       
       # Preparare la tabella dei dati
-      table <- self$stat_table %>%
-        select(gene_names, starts_with(test)) %>%
-        rename_at(vars(matches(test)), ~ str_remove(., paste0(test, "_")))
-      
-      min_thr <- table %>%
-        filter(significant) %>%
-        pull(p_val) %>%
-        max(na.rm = TRUE)
-      
-      # Creare le linee di soglia per il grafico
-      left_line <- tibble(
-        p_val = c(-log10(min_thr), -log10(min_thr), max(-log10(table$p_val), na.rm = TRUE)),
-        fold_change = c(min(table$fold_change, na.rm = TRUE), -self$fold_change, -self$fold_change)
-      )
-      
-      right_line <- tibble(
-        p_val = c(max(-log10(table$p_val), na.rm = TRUE), -log10(min_thr), -log10(min_thr)),
-        fold_change = c(self$fold_change, max(table$fold_change, na.rm = TRUE), self$fold_change)
-      )
+      table <- self$stat_table_for_test(test)
+      if (is.null(table)) {
+        return(self$plot_empty_message("Selected contrast is not available."))
+      }
       
       # Preparare il grafico
       p <- table %>%
@@ -1820,10 +2060,6 @@ QProMS <- R6Class(
       }
     ")) %>%
         e_add_nested("itemStyle", color) %>%
-        e_data(left_line, fold_change) %>%
-        e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8)) %>%
-        e_data(right_line, fold_change) %>%
-        e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8)) %>%
         e_toolbox_feature(feature = c("saveAsImage", "dataZoom")) %>%
         e_x_axis(
           name = "Difference (fold change)",
@@ -1845,9 +2081,32 @@ QProMS <- R6Class(
             lineHeight = 6 * self$plot_font_size
           )
         ) %>% 
-        e_grid(containLabel = TRUE) %>%
+        e_grid(containLabel = TRUE) %>% 
         e_group("grp") %>%
         e_show_loading(text = "Loading...", color = self$primary_color)
+
+      if (any(table$significant, na.rm = TRUE)) {
+        min_thr <- table %>%
+          filter(significant) %>%
+          pull(p_val) %>%
+          max(na.rm = TRUE)
+
+        left_line <- tibble(
+          p_val = c(-log10(min_thr), -log10(min_thr), max(-log10(table$p_val), na.rm = TRUE)),
+          fold_change = c(min(table$fold_change, na.rm = TRUE), -self$fold_change, -self$fold_change)
+        )
+
+        right_line <- tibble(
+          p_val = c(max(-log10(table$p_val), na.rm = TRUE), -log10(min_thr), -log10(min_thr)),
+          fold_change = c(self$fold_change, max(table$fold_change, na.rm = TRUE), self$fold_change)
+        )
+
+        p <- p %>%
+          e_data(left_line, fold_change) %>%
+          e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8)) %>%
+          e_data(right_line, fold_change) %>%
+          e_line(p_val, legend = FALSE, color = "#000", symbol = "none", lineStyle = list(type = "dashed", width = .8))
+      }
       
       # Aggiungere punti di evidenziazione
       if (highlights_names != "") {
@@ -1906,9 +2165,10 @@ QProMS <- R6Class(
         max(na.rm = TRUE) %>%
         ceiling()
       
-      table <- self$stat_table %>%
-        select(gene_names, starts_with(test)) %>%
-        rename_at(vars(matches(test)), ~ str_remove(., paste0(test, "_")))
+      table <- self$stat_table_for_test(test)
+      if (is.null(table)) {
+        return(self$plot_empty_message("Selected contrast is not available."))
+      }
       
       p <- table %>%
         mutate(color = case_when(
@@ -1999,7 +2259,6 @@ QProMS <- R6Class(
     plot_volcano = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
@@ -2027,7 +2286,6 @@ QProMS <- R6Class(
     plot_ma = function(tests, gene_names_marked, all_same_x, all_same_y) {
       
       if(is.null(self$stat_table)){return(NULL)}
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
@@ -2107,7 +2365,6 @@ QProMS <- R6Class(
       if(is.null(genes) || length(genes) == 0){
         genes <- "NO_GENE_SELECTED"
       }
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
@@ -2377,7 +2634,6 @@ QProMS <- R6Class(
     },
     plot_cluster_profile = function() {
       if(is.null(self$anova_table)){return(NULL)}
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
       add_trelliscope_resource_path("trelliscope", tr_dir)
@@ -2460,7 +2716,7 @@ QProMS <- R6Class(
       edges_string_table <- NULL
       edges_corum_table <- NULL
       if(is.null(self$nodes_table)){return(NULL)}
-      org_map <- inputs_type_lists$org_map
+      org_map <- self$inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
       if (is.null(org_info)) return(NULL)
       tax_id <- org_info$tax_id
@@ -2684,15 +2940,25 @@ QProMS <- R6Class(
     make_ora_list_internal = function(focus) {
       if((is.null(self$stat_table) || is.null(focus))){return(NULL)}
       test <- str_remove(focus, pattern = "_up|_down")
-      data <- self$stat_table %>%
-        select(gene_names, starts_with(test)) %>%
-        rename_at(vars(matches(test)), ~ str_remove(., paste0(test, "_"))) %>%
-        filter(significant)
+      data <- self$stat_table_for_test(test)
+      if (is.null(data) || !all(c("gene_names", "fold_change", "significant") %in% names(data))) {
+        return(tibble(
+          gene_names = c("NO_Significant", "NO_Significant"),
+          direction = c(paste0(test, "_up"), paste0(test, "_down"))
+        ))
+      }
+      data <- data %>% filter(significant)
       if(nrow(data) > 0) {
         data <- data %>%
           mutate(direction = if_else(fold_change > 0, paste0(test, "_up"), paste0(test, "_down"))) %>%
           filter(direction == focus) %>% 
           select(gene_names, direction) 
+        if (nrow(data) == 0) {
+          data <- tibble(
+            gene_names = "NO_Significant",
+            direction = focus
+          )
+        }
       } else {
         data <- tibble(
           gene_names = c("NO_Significant", "NO_Significant"),
@@ -2701,11 +2967,27 @@ QProMS <- R6Class(
       }
       return(data)
     },
+    reset_ora_feedback = function() {
+      self$ora_status <- NULL
+      self$ora_message <- NULL
+    },
+    set_ora_feedback = function(status, message) {
+      self$ora_status <- status
+      self$ora_message <- message
+    },
     go_ora = function(list_from, focus, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size, background) {
-      if(is.null(focus)){return(NULL)}
-      org_map <- inputs_type_lists$org_map
+      self$reset_ora_feedback()
+      self$ora_result_list <- NULL
+      if(is.null(focus)){
+        self$set_ora_feedback("warning", "No ORA input was selected.")
+        return(NULL)
+      }
+      org_map <- self$inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
-      if (is.null(org_info)) return(NULL)
+      if (is.null(org_info)) {
+        self$set_ora_feedback("error", "ORA could not start because the selected organism is not configured.")
+        return(NULL)
+      }
       
       orgdb     <- org_info$orgdb
       kegg_org  <- org_info$kegg
@@ -2751,25 +3033,48 @@ QProMS <- R6Class(
       if (!background) {
         uni <- NULL
       }
+      gene_vector <- map(gene_vector, ~ unique(.x[!is.na(.x) & .x != "" & .x != "NO_Significant"]))
+      gene_counts <- lengths(gene_vector)
+      empty_groups <- names(gene_vector)[gene_counts == 0]
+      if (length(empty_groups) == length(gene_vector)) {
+        self$set_ora_feedback("warning", "No significant genes were available for the selected ORA input.")
+        return(NULL)
+      }
+      gene_vector_to_run <- gene_vector[gene_counts > 0]
+      ora_errors <- character()
+      run_ora_map <- function(named_vectors, enrich_fun) {
+        imap(named_vectors, function(genes, group_name) {
+          tryCatch(
+            enrich_fun(genes),
+            error = function(e) {
+              ora_errors[[group_name]] <<- conditionMessage(e)
+              NULL
+            }
+          )
+        })
+      }
       
       if (database == "GO") {
-        self$ora_result_list <- map(gene_vector, possibly(~ enrichGO(
-          gene = .x,
-          OrgDb = orgdb,
-          keyType = 'SYMBOL',
-          ont = ontology,
-          pAdjustMethod = p_adj_method,
-          universe = uni,
-          minGSSize = min_gs_size,
-          maxGSSize = max_gs_size,
-          readable = TRUE) %>% 
-            clusterProfiler::filter(p.adjust < alpha) %>% 
-            simplify(cutoff = simplify_thr), otherwise = NULL))
+        self$ora_result_list <- run_ora_map(gene_vector_to_run, function(genes) {
+          enrichGO(
+            gene = genes,
+            OrgDb = orgdb,
+            keyType = 'SYMBOL',
+            ont = ontology,
+            pAdjustMethod = p_adj_method,
+            universe = uni,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size,
+            readable = TRUE
+          ) %>%
+            clusterProfiler::filter(p.adjust < alpha) %>%
+            simplify(cutoff = simplify_thr)
+        })
       }
       
       if (database == "KEGG") {
         entrez <- map(
-          gene_vector,
+          gene_vector_to_run,
           ~ bitr(
             .x,
             fromType = "SYMBOL",
@@ -2777,20 +3082,23 @@ QProMS <- R6Class(
             OrgDb    = orgdb
           ) %>% pull(ENTREZID)
         )
-        self$ora_result_list <- map(entrez, possibly(~ enrichKEGG(
-          gene = .x,
-          organism = kegg_org,
-          keyType = 'kegg',
-          pAdjustMethod = p_adj_method,
-          universe = uni,
-          minGSSize = min_gs_size,
-          maxGSSize = max_gs_size) %>% 
-            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+        self$ora_result_list <- run_ora_map(entrez, function(genes) {
+          enrichKEGG(
+            gene = genes,
+            organism = kegg_org,
+            keyType = 'kegg',
+            pAdjustMethod = p_adj_method,
+            universe = uni,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size
+          ) %>%
+            clusterProfiler::filter(p.adjust < alpha)
+        })
       }
       
       if (database == "WikiPathways") {
         entrez <- map(
-          gene_vector,
+          gene_vector_to_run,
           ~ bitr(
             .x,
             fromType = "SYMBOL",
@@ -2798,38 +3106,72 @@ QProMS <- R6Class(
             OrgDb    = orgdb
           ) %>% pull(ENTREZID)
         )
-        self$ora_result_list <- map(entrez, possibly(~ enrichWP(
-          gene = .x,
-          organism = wiki_org,
-          pAdjustMethod = p_adj_method,
-          universe = uni,
-          minGSSize = min_gs_size,
-          maxGSSize = max_gs_size) %>% 
-            clusterProfiler::filter(p.adjust < alpha), otherwise = NULL))
+        self$ora_result_list <- run_ora_map(entrez, function(genes) {
+          enrichWP(
+            gene = genes,
+            organism = wiki_org,
+            pAdjustMethod = p_adj_method,
+            universe = uni,
+            minGSSize = min_gs_size,
+            maxGSSize = max_gs_size
+          ) %>%
+            clusterProfiler::filter(p.adjust < alpha)
+        })
       }
-      
+      successful_groups <- names(compact(self$ora_result_list))
+      if (length(successful_groups) == 0) {
+        if (length(ora_errors) > 0) {
+          self$set_ora_feedback(
+            "error",
+            paste0("ORA failed during enrichment: ", paste(names(ora_errors), unname(ora_errors), sep = ": ", collapse = "; "))
+          )
+        } else {
+          self$set_ora_feedback("warning", "ORA ran successfully but no enrichment terms passed the current thresholds.")
+        }
+        return(NULL)
+      }
+      messages <- character()
+      if (length(empty_groups) > 0) {
+        messages <- c(messages, paste0("No significant genes for: ", paste(empty_groups, collapse = ", ")))
+      }
+      if (length(ora_errors) > 0) {
+        messages <- c(messages, paste0("Enrichment failed for: ", paste(names(ora_errors), collapse = ", ")))
+      }
+      if (length(messages) > 0) {
+        self$set_ora_feedback("warning", paste(messages, collapse = ". "))
+      }
     },
     print_ora_table = function(arranged_with) {
       if(length(compact(self$ora_result_list)) == 0){
         self$ora_table <- NULL
+        if (is.null(self$ora_message)) {
+          self$set_ora_feedback("warning", "ORA ran successfully but no enrichment terms passed the current thresholds.")
+        }
         return(NULL)
       }
-      empty <- map(self$ora_result_list, ~ pluck(.x, "result")) %>%
+      results_table <- map(self$ora_result_list, ~ pluck(.x, "result")) %>%
         list_rbind(names_to = "group") %>% 
-        as_tibble() %>% 
-        nrow()
-      if(empty == 0) {
+        as_tibble()
+      if(nrow(results_table) == 0) {
         self$ora_table <- NULL
+        if (is.null(self$ora_message)) {
+          self$set_ora_feedback("warning", "ORA ran successfully but no enrichment terms passed the current thresholds.")
+        }
         return(NULL)
       }
-      self$ora_table <- map(self$ora_result_list, ~ pluck(.x, "result")) %>%
-        list_rbind(names_to = "group") %>% 
-        as_tibble() %>% 
+      required_cols <- c("GeneRatio", "BgRatio")
+      if (!all(required_cols %in% names(results_table))) {
+        self$ora_table <- NULL
+        self$set_ora_feedback("error", "ORA returned an unexpected result structure and could not be plotted.")
+        return(NULL)
+      }
+      log_cols <- intersect(c("pvalue", "p.adjust", "qvalue"), names(results_table))
+      self$ora_table <- results_table %>% 
         separate(GeneRatio, into = c("a", "b"), sep = "/", remove = FALSE) %>%
         separate(BgRatio, into = c("c", "d"), sep = "/", remove = FALSE) %>%
         mutate(
           fold_enrichment = (as.numeric(a) / as.numeric(b)) / (as.numeric(c) / as.numeric(d)),
-          across(c("pvalue", "p.adjust", "qvalue"), ~ round(-log10(.), 3)),
+          across(all_of(log_cols), ~ round(-log10(.), 3)),
           fold_enrichment = round(fold_enrichment, 3)
         ) %>%
         select(-c(a, b, c, d)) %>% 
@@ -2878,10 +3220,9 @@ QProMS <- R6Class(
     },
     plot_ora = function(groups, arrange_with, show_n_category) {
       if(is.null(groups)){return(NULL)}
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      add_trelliscope_resource_path("trelliscope_ora", tr_dir)
       if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
@@ -2890,8 +3231,8 @@ QProMS <- R6Class(
       )
       p <- table %>% 
         mutate(plots_panel = panel_lazy(self$plot_ora_single)) %>% 
-        as_trelliscope_df(name = "BarPlot",
-                          path = file.path(tr_dir, "test"),
+        as_trelliscope_df(name = "ORA_BarPlot",
+                          path = file.path(tr_dir, "ora_plot"),
                           jsonp = FALSE) %>% 
         set_default_layout(ncol = n_col)
       
@@ -2994,7 +3335,7 @@ QProMS <- R6Class(
     },
     go_gsea = function(test, rank_type, by_condition, database, ontology, simplify_thr, alpha, p_adj_method, min_gs_size, max_gs_size) {
       if(is.null(test)){return(NULL)}
-      org_map <- inputs_type_lists$org_map
+      org_map <- self$inputs_type_lists$org_map
       org_info <- org_map[[self$organism]]
       if (is.null(org_info)) return(NULL)
       
@@ -3141,10 +3482,9 @@ QProMS <- R6Class(
     },
     plot_gsea = function(groups, arrange_with, show_n_category) {
       if(is.null(groups)){return(NULL)}
-      ## create the resouce path for trelliscope
       tr_dir <- tempfile()
       dir.create(tr_dir)
-      add_trelliscope_resource_path("trelliscope", tr_dir)
+      add_trelliscope_resource_path("trelliscope_gsea", tr_dir)
       if(length(groups) == 1){n_col = 1}else{n_col = 2}
       table <- tibble(
         focus = groups,
@@ -3153,8 +3493,8 @@ QProMS <- R6Class(
       )
       p <- table %>% 
         mutate(plots_panel = panel_lazy(self$plot_gsea_single)) %>% 
-        as_trelliscope_df(name = "BarPlot",
-                          path = file.path(tr_dir, "test"),
+        as_trelliscope_df(name = "GSEA_BarPlot",
+                          path = file.path(tr_dir, "gsea_plot"),
                           jsonp = FALSE) %>% 
         set_default_layout(ncol = n_col)
       
@@ -3202,10 +3542,20 @@ QProMS <- R6Class(
       addStyle(excel, sheet = name, style = body_style, rows = 2:n_row, cols = 1:n_col, gridExpand = T)
       saveWorkbook(excel, handler, overwrite = T)
     },
-    download_table = function(handler_file, table_type, table_extension, extra_columns) {
+    sanitize_export_name = function(name, limit = 31) {
+      clean <- gsub("[^A-Za-z0-9_]+", "_", name)
+      clean <- gsub("_+", "_", clean)
+      clean <- gsub("^_|_$", "", clean)
+      if (nchar(clean) == 0) {
+        clean <- "table"
+      }
+      substr(clean, 1, limit)
+    },
+    exportable_table = function(table_type, extra_columns = NULL) {
       table <- switch(
         table_type,
         "Filtered" = self$print_table(self$filtered_data, df = TRUE),
+        "Filtred" = self$print_table(self$filtered_data, df = TRUE),
         "Normalized" = self$print_table(self$normalized_data, df = TRUE),
         "Imputed" = self$print_table(self$imputed_data, df = TRUE),
         "Ranked" = self$print_rank_table(),
@@ -3223,10 +3573,63 @@ QProMS <- R6Class(
           select(gene_names, all_of(extra_columns))
         table <- left_join(table, extra, by = "gene_names")
       }
+      table
+    },
+    download_tables = function(handler_file, table_types, table_extension, extra_columns = NULL) {
+      tables <- map(table_types, ~ self$exportable_table(.x, extra_columns = extra_columns)) %>%
+        set_names(table_types) %>%
+        compact()
+      
+      if (length(tables) == 0) {
+        return(FALSE)
+      }
+      
+      if (length(tables) == 1) {
+        table_name <- names(tables)[1]
+        self$download_table(
+          handler_file = handler_file,
+          table_type = table_name,
+          table_extension = table_extension,
+          extra_columns = extra_columns
+        )
+        return(TRUE)
+      }
+      
+      if (table_extension != ".xlsx") {
+        return("multiple_requires_xlsx")
+      }
+      
+      header_style <- createStyle(
+        fontSize = 12,
+        fontColour = "#0f0f0f",
+        fgFill = "#faf2ca",
+        halign = "center",
+        border = "TopBottomLeftRight")
+      body_style <- createStyle(
+        halign = "center",
+        border = "TopBottomLeftRight")
+      excel <- createWorkbook()
+      for (table_name in names(tables)) {
+        sheet_name <- self$sanitize_export_name(table_name)
+        table <- tables[[table_name]]
+        addWorksheet(excel, sheetName = sheet_name, gridLines = FALSE)
+        writeDataTable(excel, sheet = sheet_name, x = table, keepNA = TRUE, na.string = "NaN")
+        n_row <- nrow(table) + 1
+        n_col <- ncol(table)
+        setColWidths(excel, sheet = sheet_name, cols = 1:n_col, widths = 21)
+        addStyle(excel, sheet = sheet_name, style = header_style, rows = 1, cols = 1:n_col, gridExpand = TRUE)
+        addStyle(excel, sheet = sheet_name, style = body_style, rows = 2:n_row, cols = 1:n_col, gridExpand = TRUE)
+      }
+      saveWorkbook(excel, handler_file, overwrite = TRUE)
+      TRUE
+    },
+    download_table = function(handler_file, table_type, table_extension, extra_columns) {
+      table <- self$exportable_table(table_type, extra_columns = extra_columns)
+      if(is.null(table)) {return(NULL)}
       switch(
         table_extension,
         ".xlsx" = self$download_excel(table, table_type, handler_file),
-        ".csv" = write.csv(table, handler_file),
+        ".csv" = write.csv(table, handler_file, row.names = FALSE),
         ".tsv" = write.table(table, handler_file, sep = "\t", row.names = FALSE, quote = FALSE)
       )
     },

@@ -55,6 +55,21 @@ r6 <- QProMS$new()
 # Load parameters
 rds_path <- file.path(pkg_dir, "app/logic/QProMS_session_internal.rds")
 param_list <- r6$loading_parameters(input_path = rds_path, self = r6, print = TRUE)
+r6$prepare_report_outputs()
+
+safe_panel_plots <- function(items, plot_fn, message) {
+  if (is.null(items) || length(items) == 0) {
+    return(list(placeholder = r6$plot_empty_message(message)))
+  }
+  plots <- map(
+    items,
+    ~ r6$safe_report_plot(
+      function() plot_fn(.x),
+      message = message
+    )
+  )
+  set_names(plots, items)
+}
 ```
 
 ```{r}
@@ -74,21 +89,26 @@ The following table presents an overview of the experimental design employed in 
 ```{r}
 #| label: "expdesign"
 
-r6$expdesign %>%
-  select(
-    Key = key,
-    Label = label,
-    Condition = condition,
-    Replicate = replicate
-  ) %>%
-  reactable(
-    wrap = FALSE,
-    striped = TRUE,
-    resizable = TRUE,
-    compact = TRUE,
-    height = "auto",
-    paginationType = "simple",
-  )
+r6$safe_report_table(
+  function() {
+    r6$expdesign %>%
+      select(
+        Key = key,
+        Label = label,
+        Condition = condition,
+        Replicate = replicate
+      ) %>%
+      reactable(
+        wrap = FALSE,
+        striped = TRUE,
+        resizable = TRUE,
+        compact = TRUE,
+        height = "auto",
+        paginationType = "simple"
+      )
+  },
+  message = "Experimental design is not available."
+)
 ```
 
 `r if(!params$Preprocessing) "::: {.content-hidden}"`
@@ -105,7 +125,7 @@ The following section presents a series of interactive quality control (QC) grap
 #| label: "count"
 #| eval: !expr if(params$Preprocessing) TRUE else FALSE
 
-r6$plot_protein_counts()
+r6$safe_report_plot(function() r6$plot_protein_counts(), "Protein counts are not available for this analysis.")
 ```
 
 ### Distribution
@@ -114,7 +134,7 @@ r6$plot_protein_counts()
 #| label: "distribution"
 #| eval: !expr if(params$Preprocessing) TRUE else FALSE
 
-r6$plot_distribution()
+r6$safe_report_plot(function() r6$plot_distribution(), "Distribution plot is not available for this analysis.")
 ```
 
 ### Upset Plot
@@ -123,7 +143,7 @@ r6$plot_distribution()
 #| label: "upset"
 #| eval: !expr if(params$Preprocessing) TRUE else FALSE
 
-r6$plot_protein_coverage()
+r6$safe_report_plot(function() r6$plot_protein_coverage(), "Upset plot is not available for this analysis.")
 ```
 
 ### CV
@@ -132,7 +152,7 @@ r6$plot_protein_coverage()
 #| label: "cv"
 #| eval: !expr if(params$Preprocessing) TRUE else FALSE
 
-r6$plot_cv()
+r6$safe_report_plot(function() r6$plot_cv(), "CV plot is not available for this analysis.")
 ```
 
 ### Missing Data
@@ -141,7 +161,7 @@ r6$plot_cv()
 #| label: "missing data"
 #| eval: !expr if(params$Preprocessing) TRUE else FALSE
 
-r6$plot_missing_data()
+r6$safe_report_plot(function() r6$plot_missing_data(), "Missing-data plot is not available for this analysis.")
 ```
 
 ### Imputed
@@ -150,7 +170,7 @@ r6$plot_missing_data()
 #| label: "imputed"
 #| eval: !expr if(params$Preprocessing) TRUE else FALSE
 
-r6$plot_missval_distribution_internal("total")
+r6$safe_report_plot(function() r6$plot_missval_distribution_internal("total"), "Imputation distribution is not available for this analysis.")
 ```
 
 :::
@@ -169,7 +189,7 @@ The x-axis (PC1) and y-axis (PC2) represent the first two principal components, 
 #| label: "pca"
 #| eval: !expr if(params$PCA) TRUE else FALSE
 
-r6$plot_pca()
+r6$safe_report_plot(function() r6$plot_pca(), "PCA is not available for this analysis.")
 ```
 
 `r if(!params$PCA) ":::"`
@@ -184,7 +204,7 @@ The following heatmap illustrates the correlation between all samples included i
 #| label: "correlation"
 #| eval: !expr if(params$Correlation) TRUE else FALSE
 
-r6$plot_correlation()
+r6$safe_report_plot(function() r6$plot_correlation(), "Correlation heatmap is not available for this analysis.")
 ```
 
 `r if(!params$Correlation) ":::"`
@@ -201,7 +221,7 @@ This plot is particularly useful for identifying highly expressed proteins that 
 #| label: "rank"
 #| eval: !expr if(params$Rank) TRUE else FALSE
 
-r6$plot_protein_rank()
+r6$safe_report_plot(function() r6$plot_protein_rank(), "Rank plot is not available for this analysis.")
 ```
 
 `r if(!params$Rank) ":::"`
@@ -224,16 +244,18 @@ This plot helps to quickly identify key proteins that are differentially express
 #| label: "volcano generation"
 #| eval: !expr if(Volcano_param) TRUE else FALSE
 
-plots <- map(
-  .x = r6$contrasts,
-  .f = ~ r6$plot_volcano_single(
-    test = .x,
-    highlights_names = "",
-    same_x = r6$univariate_same_x,
-    same_y = r6$univariate_same_y
-  )
-) %>%
-  set_names(r6$contrasts)
+plots <- safe_panel_plots(
+  r6$contrasts,
+  function(.x) {
+    r6$plot_volcano_single(
+      test = .x,
+      highlights_names = "",
+      same_x = r6$univariate_same_x,
+      same_y = r6$univariate_same_y
+    )
+  },
+  "Volcano plots are not available for this analysis."
+)
 ```
 
 ```{r}
@@ -267,7 +289,7 @@ This heatmap serves as a powerful tool for identifying proteins that are signifi
 #| label: "heatmap"
 #| eval: !expr if(Heatmap_param) TRUE else FALSE
 
-r6$plot_heatmap(order_by_expdesing = r6$anova_manual_order)
+r6$safe_report_plot(function() r6$plot_heatmap(order_by_expdesing = r6$anova_manual_order), "Heatmap is not available for this analysis.")
 ```
 
 `r if(!Heatmap_param) ":::"`
@@ -288,14 +310,17 @@ In the network visualization, edges from STRING are colored in gray, while edges
 #| label: "network"
 #| eval: !expr if(Network_param) TRUE else FALSE
 
-r6$plot_ppi_network(
-  list_from = r6$network_from_statistic,
-  score_thr = r6$network_score_thr,
-  isolate_nodes = FALSE,
-  layout = "force",
-  show_names = TRUE,
-  selected = NULL,
-  filtered = FALSE
+r6$safe_report_plot(
+  function() r6$plot_ppi_network(
+    list_from = r6$network_from_statistic,
+    score_thr = r6$network_score_thr,
+    isolate_nodes = FALSE,
+    layout = "force",
+    show_names = TRUE,
+    selected = NULL,
+    filtered = FALSE
+  ),
+  "Network plot is not available for this analysis."
 )
 ```
 
@@ -315,15 +340,17 @@ These GO terms help to contextualize the proteomic data within broader biologica
 #| label: "ora generation"
 #| eval: !expr if(ORA_param) TRUE else FALSE
 
-plots <- map(
-  .x = r6$go_ora_focus,
-  .f = ~ r6$plot_ora_single(
-    focus = .x,
-    arrange = r6$go_ora_plot_arrenge,
-    show_category = r6$go_ora_top_n
-  )
-) %>%
-  set_names(r6$go_ora_focus)
+plots <- safe_panel_plots(
+  r6$go_ora_focus,
+  function(.x) {
+    r6$plot_ora_single(
+      focus = .x,
+      arrange = r6$go_ora_plot_arrenge,
+      show_category = r6$go_ora_top_n
+    )
+  },
+  "ORA plots are not available for this analysis."
+)
 ```
 
 ```{r}
@@ -359,15 +386,17 @@ The GSEA results provide valuable insights into the biological pathways and proc
 #| label: "gsea generation"
 #| eval: !expr if(GSEA_param) TRUE else FALSE
 
-plots <- map(
-  .x = r6$go_gsea_focus,
-  .f = ~ r6$plot_gsea_single(
-    focus = .x,
-    arrange = r6$go_gsea_plot_arrenge,
-    show_category = r6$go_gsea_top_n
-  )
-) %>%
-  set_names(r6$go_gsea_focus)
+plots <- safe_panel_plots(
+  r6$go_gsea_focus,
+  function(.x) {
+    r6$plot_gsea_single(
+      focus = .x,
+      arrange = r6$go_gsea_plot_arrenge,
+      show_category = r6$go_gsea_top_n
+    )
+  },
+  "GSEA plots are not available for this analysis."
+)
 ```
 
 ```{r}
