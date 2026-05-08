@@ -137,14 +137,24 @@ r6$safe_report_plot(function() r6$plot_protein_counts(), "Protein counts are not
 r6$safe_report_plot(function() r6$plot_distribution(), "Distribution plot is not available for this analysis.")
 ```
 
-### Upset Plot
+### Coverage
 
 ```{r}
-#| label: "upset"
+#| label: "coverage"
 #| eval: !expr if(params$Preprocessing) TRUE else FALSE
 
-r6$safe_report_plot(function() r6$plot_protein_coverage(), "Upset plot is not available for this analysis.")
+r6$safe_report_plot(function() r6$plot_protein_coverage(), "Coverage is not available for this analysis.")
 ```
+
+### Intersection
+
+```{r}
+#| label: "intersection"
+#| eval: !expr if(params$Preprocessing) TRUE else FALSE
+
+r6$safe_report_plot(function() r6$plot_protein_coverage_intersections(), "Intersection is not available for this analysis.")
+```
+
 
 ### CV
 
@@ -429,4 +439,3 @@ param_list %>%
   tibble::enframe(name = "params", value = "value") %>% 
   reactable::reactable(compact = TRUE, highlight = TRUE)
 ```
-

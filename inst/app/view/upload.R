@@ -47,7 +47,7 @@ ui <- function(id) {
           uiOutput(ns("alert_message")),
           reactableOutput(ns("raw_summary_table")),
           sidebar = sidebar(
-            width = 300,
+            width = 375,
             actionButton(
               inputId = ns("confirm2"),
               label = "Make Design Table",
@@ -65,7 +65,7 @@ ui <- function(id) {
             rHandsontableOutput(ns("exp_design"))
           ),
           sidebar = sidebar(
-            width = 300,
+            width = 375,
             actionButton(
               inputId = ns("verify"),
               label = "Verify Design Table",
@@ -80,7 +80,7 @@ ui <- function(id) {
           uiOutput(ns("alert_message2")),
           reactableOutput(ns("complete_expdesign")),
           sidebar = sidebar(
-            width = 300,
+            width = 375,
             uiOutput(ns("define_action_button"))
           )
         )
@@ -157,21 +157,17 @@ server <- function(id, r6, main_session) {
                 "Select Gene Column",
                 choices = colnames(r6$raw_data)[sapply(r6$raw_data, is.character)]
               ),
-              layout_columns(
-                col_widths = c(9, 3),
                 textInput(
                   ns("intensity_pattern"),
                   "Filter intensity columns (regex or keyword)",
                   placeholder = "e.g. LFQ|Intensity|Sample_"
                 ),
                 div(
-                  style = "margin-top: 1.8rem;",
                   input_switch(
                     id = ns("auto_select_pattern"),
                     label = "Auto-select",
                     value = TRUE
                   )
-                )
               ),
               selectizeInput(
                 ns("intensity_columns"),
