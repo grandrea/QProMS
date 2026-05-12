@@ -2312,7 +2312,7 @@ QProMS <- R6Class(
     },
     plot_stat_profile_single = function(contrast, gene) {
       
-      if(gene == "NO_GENE_SELECTED"){return(self$plot_empty_message("No genes selected."))}
+      if(gene == "NO_GENE_SELECTED"){return(self$plot_empty_message("Select genes in the table."))}
       data <- if (self$is_imp) self$imputed_data else self$normalized_data
       cond <- unique(str_split_1(contrast, "_vs_"))
       
@@ -2521,7 +2521,7 @@ QProMS <- R6Class(
     plot_protein_profile = function(gene) {
       
       if(is.null(self$anova_table)){return(NULL)}
-      if(is.null(gene) || length(gene) == 0){return(self$plot_empty_message("No Protein selected."))}
+      if(is.null(gene) || length(gene) == 0){return(self$plot_empty_message("Select proteins in the table."))}
       
       clu <- self$anova_table %>%
         filter(gene_names %in% gene) %>%
