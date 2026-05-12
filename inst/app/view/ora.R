@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, NS, selectInput, br, sliderInput, actionButton, updateSliderInput, updateNumericInput, isolate, icon, observe, updateSelectInput, updateSelectizeInput, reactive, observeEvent, numericInput, conditionalPanel, selectizeInput],
+  shiny[moduleServer, NS, selectInput, br, sliderInput, actionButton, updateSliderInput, updateNumericInput, isolate, icon, observe, updateSelectInput, updateSelectizeInput, reactive, observeEvent, numericInput, conditionalPanel, selectizeInput, showNotification],
   bslib[page_sidebar, layout_columns, navset_card_underline, nav_panel, update_switch, sidebar, accordion, accordion_panel, input_switch, tooltip, input_task_button],
   gargoyle[watch, trigger],
   trelliscope[trelliscopeOutput, renderTrelliscope],
@@ -246,6 +246,22 @@ ui <- function(id) {
 #' @export
 server <- function(id, r6, main_session) {
   moduleServer(id, function(input, output, session) {
+    render_ora_outputs <- function(message = NULL, notification_type = "warning") {
+      if (!is.null(message)) {
+        showNotification(message, type = notification_type)
+      }
+      output$bar_plot <- renderTrelliscope({
+        focus_plot <- r6$go_ora_focus
+        if (is.null(focus_plot) || length(focus_plot) == 0) {
+          focus_plot <- "manual"
+        }
+        if(r6$go_ora_from_statistic == "manual") {focus_plot <- "manual"}
+        r6$plot_ora(focus_plot, r6$go_ora_plot_arrenge, r6$go_ora_top_n)
+      })
+      output$table <- renderReactable({
+        r6$reactable_functional_analysis(r6$ora_table)
+      })
+    }
     
     observe({
       watch("stat")
@@ -362,18 +378,20 @@ server <- function(id, r6, main_session) {
         )
         r6$print_ora_table(r6$go_ora_plot_arrenge)
       }, error = function(e) {
-        return(NULL)
+        r6$ora_result_list <- NULL
+        r6$ora_table <- NULL
+        r6$set_ora_feedback("error", paste("ORA failed:", conditionMessage(e)))
+        render_ora_outputs(r6$ora_message, "error")
+        return(invisible(NULL))
       })
-      output$bar_plot <- renderTrelliscope({
-        if(!is.null(r6$ora_result_list)) {
-          focus_plot <- r6$go_ora_focus
-          if(r6$go_ora_from_statistic == "manual") {focus_plot <- "manual"}
-          r6$plot_ora(focus_plot, r6$go_ora_plot_arrenge, r6$go_ora_top_n)
-        }
-      })
-      output$table <- renderReactable({
-        r6$reactable_functional_analysis(r6$ora_table)
-      })
+      ora_status <- if (length(r6$ora_status) == 1 && !is.na(r6$ora_status)) r6$ora_status else ""
+      notification_type <- switch(
+        ora_status,
+        error = "error",
+        warning = "warning",
+        "message"
+      )
+      render_ora_outputs(r6$ora_message, notification_type)
     })
   })
 }
