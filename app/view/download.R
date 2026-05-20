@@ -299,7 +299,8 @@ server <- function(id, r6) {
             quarto_render(
               "app/logic/Report_QProMS.qmd",
               execute_params = param_list,
-              quiet = FALSE
+              quiet = FALSE,
+              execute_dir = "/srv/shiny-server"
             )
             incProgress(1/5, message = "Finish!")
             file.copy("app/logic/Report_QProMS.html", file)
