@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput, checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate, showNotification, reactiveVal],
+  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput, checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate, showNotification, reactiveVal, renderUI],
   bslib[page_fillable, layout_columns, card, card_header, card_body, accordion, accordion_panel, nav_select, tooltip],
   gargoyle[init, watch, trigger],
   quarto[quarto_render],
@@ -115,25 +115,7 @@ ui <- function(id) {
               )
             )
           ),
-          div(
-            class = "mt-3",
-            actionButton(
-              ns("generate_report"),
-              label = "📄 Generate report",
-              class = "btn-primary w-100"
-            ),
-            br(),
-            br(),
-            downloadButton(
-              ns("download_report"),
-              label = "⬇ Download generated report (.html)",
-              class = "btn-outline-primary w-100"
-            ),
-            span(
-              class = "text-muted small",
-              "First generate the report, then download it when ready."
-            )
-          )
+          uiOutput(ns("report_controls"))
         )
       ),
       card(
@@ -167,6 +149,54 @@ server <- function(id, r6) {
   moduleServer(id, function(input, output, session) {
     
     report_file <- reactiveVal(NULL)
+    
+    output$report_controls <- renderUI({
+      generated_report <- report_file()
+      report_ready <- !is.null(generated_report) && file.exists(generated_report)
+      
+      if (!report_ready) {
+        div(
+          class = "mt-3",
+          actionButton(
+            session$ns("generate_report"),
+            label = "📄 Generate report",
+            class = "btn-primary w-100"
+          ),
+          span(
+            class = "text-muted small",
+            "Generate the report first. The download button will appear when the report is ready."
+          )
+        )
+      } else {
+        div(
+          class = "mt-3",
+          actionButton(
+            session$ns("generate_report"),
+            label = "📄 Generate report again",
+            class = "btn-primary w-100"
+          ),
+          br(),
+          br(),
+          downloadButton(
+            session$ns("download_report"),
+            label = "⬇ Download generated report (.html)",
+            class = "btn-outline-primary w-100"
+          ),
+          span(
+            class = "text-muted small",
+            "Report generated successfully. You can now download it."
+          )
+        )
+      }
+    })
+    
+    observeEvent(
+      list(input$report_preset, input$report_section),
+      {
+        report_file(NULL)
+      },
+      ignoreInit = TRUE
+    )
     
     get_table_from_r6 <- function(table_type) {
       switch(table_type,
@@ -281,6 +311,8 @@ server <- function(id, r6) {
     )
     
     observeEvent(input$generate_report, {
+      report_file(NULL)
+      
       if (is.null(r6$data)) {
         shinyalert(
           title = "No data loaded",
@@ -325,37 +357,37 @@ server <- function(id, r6) {
         )
         
         source_report <- "/srv/shiny-server/app/logic/Report_QProMS.html"
-
+        
         if (file.exists(source_report)) {
           file.remove(source_report)
         }
-
+        
         quarto_render(
           input = "/srv/shiny-server/app/logic/Report_QProMS.qmd",
           execute_params = param_list,
           quiet = FALSE,
           execute_dir = "/srv/shiny-server"
         )
-
+        
         incProgress(1/5, message = "Finalizing report")
-
+        
         if (!file.exists(source_report)) {
           stop("Report HTML was not created: ", source_report)
         }
-
+        
         tmp_report <- file.path(
           tempdir(),
           paste0("QProMS_report_", Sys.getpid(), "_", as.integer(Sys.time()), ".html")
         )
-
+        
         ok <- file.copy(source_report, tmp_report, overwrite = TRUE)
-
+        
         if (!isTRUE(ok) || !file.exists(tmp_report)) {
           stop("Failed to copy report to temporary file: ", tmp_report)
         }
-
+        
         file.remove(source_report)
-
+        
         report_file(tmp_report)
         
         showNotification(
