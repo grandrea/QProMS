@@ -1,5 +1,5 @@
 box::use(
-  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput, checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate, showNotification],
+  shiny[moduleServer, observe, downloadButton, fluidPage, p, updateCheckboxGroupInput, span, uiOutput, checkboxInput, updateSelectInput, downloadHandler, NS, conditionalPanel, withProgress, incProgress, radioButtons, selectInput, actionButton, hr, h3, h4, br, div, observeEvent, req, sliderInput, checkboxGroupInput, isolate, showNotification, reactiveVal, renderUI],
   bslib[page_fillable, layout_columns, card, card_header, card_body, accordion, accordion_panel, nav_select, tooltip],
   gargoyle[init, watch, trigger],
   quarto[quarto_render],
@@ -115,18 +115,7 @@ ui <- function(id) {
               )
             )
           ),
-          div(
-            class = "mt-3",
-            downloadButton(
-              ns("download_report"),
-              label = "📄 Generate report (.html)",
-              class = "btn-primary w-100"
-            ),
-            span(
-              class = "text-muted small",
-              "Report generation may take up to some minutes."
-            )
-          )
+          uiOutput(ns("report_controls"))
         )
       ),
       card(
@@ -158,6 +147,56 @@ ui <- function(id) {
 #' @export
 server <- function(id, r6) {
   moduleServer(id, function(input, output, session) {
+    
+    report_file <- reactiveVal(NULL)
+    
+    output$report_controls <- renderUI({
+      generated_report <- report_file()
+      report_ready <- !is.null(generated_report) && file.exists(generated_report)
+      
+      if (!report_ready) {
+        div(
+          class = "mt-3",
+          actionButton(
+            session$ns("generate_report"),
+            label = "📄 Generate report",
+            class = "btn-primary w-100"
+          ),
+          span(
+            class = "text-muted small",
+            "Generate the report first. The download button will appear when the report is ready."
+          )
+        )
+      } else {
+        div(
+          class = "mt-3",
+          actionButton(
+            session$ns("generate_report"),
+            label = "📄 Generate report again",
+            class = "btn-primary w-100"
+          ),
+          br(),
+          br(),
+          downloadButton(
+            session$ns("download_report"),
+            label = "⬇ Download generated report (.html)",
+            class = "btn-outline-primary w-100"
+          ),
+          span(
+            class = "text-muted small",
+            "Report generated successfully. You can now download it."
+          )
+        )
+      }
+    })
+    
+    observeEvent(
+      list(input$report_preset, input$report_section),
+      {
+        report_file(NULL)
+      },
+      ignoreInit = TRUE
+    )
     
     get_table_from_r6 <- function(table_type) {
       switch(table_type,
@@ -271,42 +310,112 @@ server <- function(id, r6) {
       }
     )
     
+    observeEvent(input$generate_report, {
+      report_file(NULL)
+      
+      if (is.null(r6$data)) {
+        shinyalert(
+          title = "No data loaded",
+          text  = "Please load your data before generating a report.",
+          type  = "warning"
+        )
+        return(invisible(NULL))
+      }
+      
+      withProgress(message = "The report is rendering", value = 0, {
+        incProgress(1/5, message = "Loading parameters")
+        
+        params <- c(
+          "Preprocessing", "PCA", "Correlation", "Rank",
+          "Volcano", "Heatmap", "Network", "ORA", "GSEA"
+        )
+        
+        incProgress(1/5, message = "Saving session")
+        
+        session_file <- "/srv/shiny-server/app/logic/QProMS_session_internal.rds"
+        r6$download_parameters(
+          handler_file = session_file,
+          r6class = r6
+        )
+        
+        incProgress(1/5, message = "Selecting report sections")
+        
+        if (isolate(input$report_preset) == "custom") {
+          param_list <- map(params, ~ .x %in% isolate(input$report_section)) %>%
+            set_names(params)
+        } else {
+          param_list <- map(params, ~ .x %in% params) %>%
+            set_names(params)
+        }
+        
+        print(param_list)
+        
+        incProgress(
+          1/5,
+          message = "Rendering report",
+          detail = "This operation can take some time."
+        )
+        
+        source_report <- "/srv/shiny-server/app/logic/Report_QProMS.html"
+        
+        if (file.exists(source_report)) {
+          file.remove(source_report)
+        }
+        
+        quarto_render(
+          input = "/srv/shiny-server/app/logic/Report_QProMS.qmd",
+          execute_params = param_list,
+          quiet = FALSE,
+          execute_dir = "/srv/shiny-server"
+        )
+        
+        incProgress(1/5, message = "Finalizing report")
+        
+        if (!file.exists(source_report)) {
+          stop("Report HTML was not created: ", source_report)
+        }
+        
+        tmp_report <- file.path(
+          tempdir(),
+          paste0("QProMS_report_", Sys.getpid(), "_", as.integer(Sys.time()), ".html")
+        )
+        
+        ok <- file.copy(source_report, tmp_report, overwrite = TRUE)
+        
+        if (!isTRUE(ok) || !file.exists(tmp_report)) {
+          stop("Failed to copy report to temporary file: ", tmp_report)
+        }
+        
+        file.remove(source_report)
+        
+        report_file(tmp_report)
+        
+        showNotification(
+          "Report generated successfully. You can now download it.",
+          type = "message",
+          duration = 8
+        )
+      })
+    })
+    
     output$download_report <- downloadHandler(
       filename = function() {
         paste0("QProMS_report_", Sys.Date(), ".html")
       },
       content = function(file) {
-        if (!is.null(r6$data)) {
-          withProgress(message = "The report is rendering", value = 0, {
-            incProgress(1/5, message = "Loading Parameters")
-            Sys.sleep(1)
-            params <- c("Preprocessing", "PCA", "Correlation", "Rank",
-                        "Volcano", "Heatmap", "Network", "ORA", "GSEA")
-            incProgress(1/5, message = "Save session")
-            Sys.sleep(1)
-            r6$download_parameters(handler_file = "app/logic/QProMS_session_internal.rds", r6class = r6)
-            incProgress(1/5, message = "Use only selected Section")
-            Sys.sleep(1)
-            if (isolate(input$report_preset) == "custom") {
-              param_list <- map(params, ~ .x %in% isolate(input$report_section)) %>%
-                set_names(params)
-            } else {
-              param_list <- map(params, ~ .x %in% params) %>%
-                set_names(params)
-            }
-            print(param_list)
-            incProgress(1/5, message = "Render Report", detail = "This operation can take some time..")
-            quarto_render(
-              "app/logic/Report_QProMS.qmd",
-              execute_params = param_list,
-              quiet = FALSE
-            )
-            incProgress(1/5, message = "Finish!")
-            file.copy("app/logic/Report_QProMS.html", file)
-            file.remove("app/logic/Report_QProMS.html")
-          })
+        generated_report <- report_file()
+        
+        if (is.null(generated_report) || !file.exists(generated_report)) {
+          stop("Report has not been generated yet. Please click 'Generate report' first.")
         }
-      }
+        
+        ok <- file.copy(generated_report, file, overwrite = TRUE)
+        
+        if (!isTRUE(ok)) {
+          stop("Failed to copy generated report to download file.")
+        }
+      },
+      contentType = "text/html"
     )
     
     output$download_params <- downloadHandler(
