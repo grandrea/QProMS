@@ -1,8 +1,7 @@
-# Apri DESCRIPTION e SOSTITUISCI TUTTO con:
 Package: qproms
 Type: Package
 Title: QProMS - Quantitative Proteomics Made Simple
-Version: 0.1.0
+Version: 1.0.0
 Author: Fabio Bedin and QProMS Team
 Maintainer: Fabio Bedin <fabio.bedin.123@gmail.com>
 Description: Shiny application for quantitative proteomics analysis
