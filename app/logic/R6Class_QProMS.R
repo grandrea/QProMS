@@ -437,7 +437,8 @@ QProMS <- R6Class(
       if (normalized$changed) {
         results$condition_name_warning <- paste(
           "warning Group names cannot contain \"_\"; it has been replaced with \"-\" in:",
-          paste(normalized$changed_conditions, collapse = ", ")
+          paste(normalized$changed_conditions, collapse = ", "),
+          "You can proceed by clicking START."
         )
       }
       
